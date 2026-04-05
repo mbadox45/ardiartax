@@ -1,12 +1,16 @@
 // app/admin/layout.tsx
-"use client"
-
+import type { Metadata } from "next"
 import { AppSidebar } from "@/components/layout/app-sidebar"
 import { SiteHeader } from "@/components/layout/site-header"
 import {
   SidebarInset,
   SidebarProvider,
 } from "@/components/ui/sidebar"
+
+export const metadata: Metadata = {
+  title: "Dashboard",
+}
+
 
 export default function AdminLayout({
   children,

@@ -1,10 +1,10 @@
 import type { Metadata } from "next"
-import RecapInvoices from "./recap"
+import PebClient from "./PebClient"
 
 export const metadata: Metadata = {
-  title: "Recap Invoices",
+  title: "Goods Export Notification",
 }
 
 export default function Page() {
-  return <RecapInvoices />
+  return <PebClient />
 }
