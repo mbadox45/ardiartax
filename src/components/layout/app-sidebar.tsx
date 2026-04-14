@@ -1,6 +1,8 @@
+// src/components/layout/app-sidebar.tsx
 "use client"
 
 import * as React from "react"
+// import Cookies from "js-cookie"
 
 import {
   Camera,
@@ -36,10 +38,14 @@ import {
   SidebarMenuItem,
 } from "@/components/ui/sidebar"
 
+// const name = Cookies.get("name") || "Guest"
+// const email = Cookies.get("username") || "guest@ardiartax.com"
+// const cookieStore = await cookies()
+
 const data = {
   user: {
-    name: "shadcn",
-    email: "m@example.com",
+    name: "Guest",
+    email: "guest@ardiartax.com",
     avatar: "/avatars/shadcn.jpg",
   },
   navMain: [
@@ -175,10 +181,19 @@ const data = {
   ],
 }
 
-export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
+// Tambahkan Interface untuk Type Safety
+interface AppSidebarProps extends React.ComponentProps<typeof Sidebar> {
+  user: {
+    name: string;
+    email: string;
+    avatar: string;
+  };
+}
+
+export function AppSidebar({ user, ...props }: AppSidebarProps) {
   return (
-    <Sidebar collapsible="offcanvas" {...props}>
-      <SidebarHeader>
+    <Sidebar collapsible="offcanvas" {...props} variant="inset">
+      <SidebarHeader className="bg-cyan-800 text-white rounded-t-md">
         <SidebarMenu>
           <SidebarMenuItem>
             <SidebarMenuButton
@@ -193,13 +208,13 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
           </SidebarMenuItem>
         </SidebarMenu>
       </SidebarHeader>
-      <SidebarContent>
+      <SidebarContent className="bg-cyan-800 text-white">
         <NavMain items={data.navMain} />
         {/* <NavDocuments items={data.documents} /> */}
         {/* <NavSecondary items={data.navSecondary} className="mt-auto" /> */}
       </SidebarContent>
-      <SidebarFooter>
-        <NavUser user={data.user} />
+      <SidebarFooter className="bg-cyan-800 text-white rounded-b-md">
+        <NavUser user={user} />
       </SidebarFooter>
     </Sidebar>
   )

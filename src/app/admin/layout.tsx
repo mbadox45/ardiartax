@@ -1,7 +1,10 @@
 // app/admin/layout.tsx
 import type { Metadata } from "next"
+import { cookies } from "next/headers"
 import { AppSidebar } from "@/components/layout/app-sidebar"
 import { SiteHeader } from "@/components/layout/site-header"
+import { Toaster } from "@/components/ui/sonner"
+
 import {
   SidebarInset,
   SidebarProvider,
@@ -12,11 +15,21 @@ export const metadata: Metadata = {
 }
 
 
-export default function AdminLayout({
+export default async function AdminLayout({
   children,
 }: {
   children: React.ReactNode
 }) {
+
+  const cookieStore = await cookies()
+  
+  // Ambil data di sisi server
+  const userData = {
+    name: cookieStore.get("name")?.value || "Guest",
+    email: cookieStore.get("username")?.value || "guest@ardiartax.com",
+    avatar: "/avatars/default.jpg",
+  }
+
   return (
     <SidebarProvider
       style={
@@ -26,7 +39,7 @@ export default function AdminLayout({
         } as React.CSSProperties
       }
     >
-      <AppSidebar variant="inset" />
+      <AppSidebar user={userData} />
 
       <SidebarInset>
         <SiteHeader />
@@ -37,10 +50,10 @@ export default function AdminLayout({
 
               {/* ⬇️ ini isi dinamis dari page */}
               {children}
-
             </div>
           </div>
         </div>
+        <Toaster />
       </SidebarInset>
     </SidebarProvider>
   )
