@@ -88,7 +88,7 @@ export function LoginForm({
 
         <Field>
           <FieldLabel htmlFor="email">Email</FieldLabel>
-          <Input id="email" name="email" type="email" placeholder="xxx@gmail.com" required />
+          <Input id="email" name="email" type="email" placeholder="xxx@gmail.com" suppressHydrationWarning required />
         </Field>
 
         <Field>
@@ -98,11 +98,11 @@ export function LoginForm({
               Lupa kata sandi?
             </a>
           </div>
-          <Input id="password" name="password" type="password" required />
+          <Input id="password" name="password" type="password" autoComplete="off" suppressHydrationWarning required />
         </Field>
 
         <Field>
-          <Button type="submit" className="w-full">Masuk Sekarang</Button>
+          <Button type="submit" className="w-full" suppressHydrationWarning>Masuk Sekarang</Button>
         </Field>
 
         <Field>

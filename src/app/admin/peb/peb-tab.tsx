@@ -2,11 +2,19 @@
 "use client"
 
 import { useState, DragEvent } from "react"
+import { toast } from "sonner"
+import { pebService } from "@/lib/api/peb.service" // Import service
+import { Loader2 } from "lucide-react"
 
-export default function PebTab() {
-  const [files, setFiles] = useState<File[]>([])
+interface PebTabProps {
+  files: File[];
+  setFiles: React.Dispatch<React.SetStateAction<File[]>>;
+  onUploadSuccess: () => Promise<void>;
+}
+
+export default function PebTab({ files, setFiles, onUploadSuccess }: PebTabProps) {
   const [isDragging, setIsDragging] = useState(false)
-
+  const [isUploading, setIsUploading] = useState(false)
   // =============================
   // Helpers
   // =============================
@@ -68,16 +76,40 @@ export default function PebTab() {
   // =============================
   // NEW: Screening handler
   // =============================
-  const handleScreening = () => {
-    if (files.length === 0) {
-      alert("Tidak ada file untuk di-screening")
-      return
+  const handleScreening = async () => {
+    if (files.length === 0) return
+
+    setIsUploading(true)
+    const toastId = toast.loading(`Sedang memproses ${files.length} file...`)
+
+    try {
+      await pebService.upload(files)
+      
+      toast.success("Berhasil mengunggah dan screening file", { 
+        id: toastId,
+        position: "top-center" 
+      })
+      
+      setFiles([]) // Bersihkan list setelah sukses
+      // 2. Pemicu update list di tab sebelah secara otomatis
+      await onUploadSuccess()
+
+    } catch (error: unknown) {
+      let errorMessage = "Terjadi kesalahan sistem"
+
+      // Periksa apakah ini adalah instance Error standar
+      if (error instanceof Error) {
+        errorMessage = error.message
+      } 
+      // Jika Anda ingin menangani string error mentah (jarang, tapi mungkin)
+      else if (typeof error === "string") {
+        errorMessage = error
+      }
+
+      toast.error(errorMessage, { id: toastId })
+    } finally {
+      setIsUploading(false)
     }
-
-    // 🔥 nanti di sini bisa kirim ke backend / parsing
-    console.log("Screening files:", files)
-
-    alert(`Screening ${files.length} file dimulai`)
   }
 
   return (
@@ -129,14 +161,15 @@ export default function PebTab() {
             <div className="flex items-center gap-2">
               <button
                 onClick={handleScreening}
-                disabled={files.length === 0}
-                className={`text-xs px-3 py-1 rounded-md border ${
-                  files.length === 0
+                disabled={files.length === 0 || isUploading}
+                className={`flex items-center gap-2 text-xs px-3 py-1 rounded-md border transition ${
+                  files.length === 0 || isUploading
                     ? "text-gray-400 border-gray-300 cursor-not-allowed"
                     : "text-blue-600 border-blue-500 hover:bg-blue-50"
                 }`}
               >
-                Screening File
+                {isUploading && <Loader2 className="h-3 w-3 animate-spin" />}
+                {isUploading ? "Processing..." : "Screening File"}
               </button>
 
               {files.length > 0 && (

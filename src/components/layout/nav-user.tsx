@@ -1,5 +1,7 @@
+// src/components/layout/nav-user.tsx
 "use client"
 import { useState, useEffect } from "react"
+import { useRouter } from "next/navigation" // Import router untuk redirect
 import Cookies from "js-cookie"
 
 import {
@@ -8,6 +10,7 @@ import {
   LogOut,
   Bell,
   UserCircle,
+  Loader2
 } from "lucide-react";
 
 import {
@@ -41,6 +44,23 @@ export function NavUser({
   }
 }) {
   const { isMobile } = useSidebar()
+  const router = useRouter()
+  const [isLoggingOut, setIsLoggingOut] = useState(false)
+
+  const handleLogout = () => {
+    setIsLoggingOut(true)
+    // 1. Hapus cookie (sesuaikan nama key dengan yang Anda gunakan, misal 'token')
+    Cookies.remove("access_token")
+    Cookies.remove("name")
+    Cookies.remove("role")
+    Cookies.remove("username")
+    // 2. Redirect ke halaman login
+    // Gunakan replace agar user tidak bisa kembali ke dashboard dengan tombol 'Back'
+    router.replace("/login")
+    // Opsional: Refresh halaman untuk memastikan semua state auth bersih
+    router.refresh()
+  }
+
 
   return (
     <SidebarMenu>
@@ -99,9 +119,17 @@ export function NavUser({
               </DropdownMenuItem>
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
-            <DropdownMenuItem>
-              <LogOut />
-              Log out
+            <DropdownMenuItem 
+              onClick={handleLogout} 
+              className="text-red-600 focus:text-red-600 cursor-pointer"
+              disabled={isLoggingOut}
+            >
+              {isLoggingOut ? (
+                <Loader2 className="animate-spin size-4" />
+              ) : (
+                <LogOut className="size-4" />
+              )}
+              <span>{isLoggingOut ? "Logging out..." : "Log out"}</span>
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
