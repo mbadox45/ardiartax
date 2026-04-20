@@ -2,9 +2,11 @@
 "use client"
 import { useState } from "react"
 import { useRouter } from "next/navigation"
-import { AuthService } from "@/lib/api/api-auth" // Import class yang baru dibuat
+import { AuthService } from "@/lib/api/api-auth"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
+import { Loader2 } from "lucide-react" // Import icon loading
+import { toast } from "sonner" // Pastikan library sonner sudah terinstall
 import {
   Field,
   FieldDescription,
@@ -12,7 +14,7 @@ import {
   FieldLabel,
 } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
-
+import { Toaster } from "@/components/ui/sonner" // Import Toaster untuk menampilkan toast notifications
 
 export function LoginForm({
   className,
@@ -20,62 +22,80 @@ export function LoginForm({
 }: React.ComponentProps<"form">) {
   const router = useRouter()
   const [isLoading, setIsLoading] = useState(false)
-  const [error, setError] = useState("")
+  const [isRedirecting, setIsRedirecting] = useState(false) // State khusus untuk transisi page
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
     setIsLoading(true)
-    setError("")
 
     const formData = new FormData(event.currentTarget)
     const email = formData.get("email") as string
     const password = formData.get("password") as string
 
     try {
-      const data = await AuthService.login(email, password)
+      const response = await AuthService.login(email, password)
+      const load = response.data
       
-      // Simpan token ke cookie
-      console.log("Login berhasil, token:", data)
-      const load = data.data;
-      const accessToken = load.access_token;
-      const name = load.user.name;
-      const role = load.user.role;
-      const username = load.user.username;
+      // Destructuring data
+      const { access_token: accessToken } = load
+      const { name, role, username } = load.user
 
-      const ONE_DAY_IN_SECONDS = 24 * 60 * 60; // 86400 detik
+      const ONE_DAY_IN_SECONDS = 24 * 60 * 60
+      const cookieConfig = `; path=/; max-age=${ONE_DAY_IN_SECONDS}; SameSite=Lax`
 
-      // Konfigurasi Cookie (Path / agar bisa diakses di semua halaman)
-      const cookieConfig = `; path=/; max-age=${ONE_DAY_IN_SECONDS}; SameSite=Lax`;
-
+      // Simpan Cookies
       document.cookie = `access_token=${accessToken}${cookieConfig}; Secure`
       document.cookie = `name=${name}${cookieConfig}`
       document.cookie = `role=${role}${cookieConfig}`
       document.cookie = `username=${username}${cookieConfig}`
-      // document.cookie = `access_token=${data.access_token}; path=/; max-age=3600; SameSite=Lax`
+
+      // 1. Munculkan Toast Sukses
+      toast.success("Login Berhasil!", {
+        description: `Selamat datang kembali, ${name}.`,
+        position: "top-center" 
+      })
+
+      // 2. Aktifkan Loading Page sebelum redirect
+      setIsRedirecting(true)
       
+      // 3. Redirect ke Admin
       router.push("/admin")
-    } catch (err: unknown) { // 1. Ubah 'any' menjadi 'unknown'
-      // 2. Lakukan Type Guarding
+      
+    } catch (err: unknown) {
+      let errorMessage = "Terjadi kesalahan yang tidak terduga."
+      
       if (err instanceof Error) {
-        setError(err.message)
+        errorMessage = err.message
       } else if (typeof err === "string") {
-        setError(err)
-      } else {
-        setError("Terjadi kesalahan yang tidak terduga.")
+        errorMessage = err
       }
-    } finally {
+
+      // 4. Munculkan Toast Gagal
+      toast.error("Login Gagal", {
+        description: errorMessage,
+        position: "top-center" 
+      })
+      
       setIsLoading(false)
     }
   }
 
+  // Jika sedang redirecting, tampilkan full screen loader
+  if (isRedirecting) {
+    return (
+      <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-background/80 backdrop-blur-sm">
+        <Loader2 className="h-10 w-10 animate-spin text-primary" />
+        <p className="mt-4 text-sm font-medium animate-pulse">Menyiapkan dashboard Anda...</p>
+      </div>
+    )
+  }
+
   return (
     <form onSubmit={handleSubmit} className={cn("flex flex-col gap-6", className)} {...props}>
+      <Toaster className="bg-black text-white" /> {/* Pastikan Toaster ada di dalam komponen agar bisa menampilkan toast notifications */}
       <FieldGroup>
         <div className="flex flex-col items-center gap-2 mb-6 text-center">
-          {/* Judul dalam Bahasa Indonesia */}
           <h1 className="text-2xl font-bold">Masuk ke Akun Anda</h1>
-          
-          {/* Keterangan Identitas Aplikasi */}
           <div className="space-y-1">
             <p className="text-sm font-medium text-primary">
               <span className="font-bold">ArdiarTax</span> - Solusi Manajemen Pajak Modern
@@ -88,7 +108,7 @@ export function LoginForm({
 
         <Field>
           <FieldLabel htmlFor="email">Email</FieldLabel>
-          <Input id="email" name="email" type="email" placeholder="xxx@gmail.com" suppressHydrationWarning required />
+          <Input id="email" name="email" type="email" placeholder="xxx@gmail.com" disabled={isLoading} required />
         </Field>
 
         <Field>
@@ -98,11 +118,20 @@ export function LoginForm({
               Lupa kata sandi?
             </a>
           </div>
-          <Input id="password" name="password" type="password" autoComplete="off" suppressHydrationWarning required />
+          <Input id="password" name="password" type="password" disabled={isLoading} required />
         </Field>
 
         <Field>
-          <Button type="submit" className="w-full" suppressHydrationWarning>Masuk Sekarang</Button>
+          <Button type="submit" className="w-full" disabled={isLoading}>
+            {isLoading ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Memverifikasi...
+              </>
+            ) : (
+              "Masuk Sekarang"
+            )}
+          </Button>
         </Field>
 
         <Field>

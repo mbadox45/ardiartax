@@ -1,26 +1,31 @@
 // src/lib/api/peb.service.ts
-import { PebData } from "@/app/admin/peb/columns";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
 import Cookies from "js-cookie"; // Pastikan sudah install: npm install js-cookie @types/js-cookie
 
 const token = Cookies.get("access_token");
 
+export interface PebData {
+  id: string
+  document_number: string
+  buyer_name: string
+  document_date: string
+  status: "Draft" | "Terkirim" | "Disetujui"
+  nilai_fob: number
+  nilai_tukar: number
+}
+
+export interface UploadedPebItem {
+  id: number;
+  filename: string;
+  path: string;
+  status: string;
+}
+
 export interface UploadPebResponse {
   success: boolean;
   message: string;
-  data?: {
-    uploaded_files: Array<{
-      id: number;
-      filename: string;
-      path: string;
-      status: string;
-    }>;
-    summary: {
-      total_processed: number;
-      total_failed: number;
-    };
-  };
+  data?: UploadedPebItem[];
 }
 
 class PebService {
@@ -33,9 +38,39 @@ class PebService {
     /**
      * Mengambil semua data PEB
      */
-    async getAll(): Promise<PebData[]> {
+    async getAll(masaTerbit?: string): Promise<PebData[]> {
         try {
-            const response = await fetch(this.baseUrl, {
+            // 1. Konstruksi URL dengan Query Params jika ada
+            let url = this.baseUrl;
+            if (masaTerbit) {
+                const params = new URLSearchParams({ masa_terbit: masaTerbit });
+                url = `${this.baseUrl}?${params.toString()}`;
+            }
+
+            const response = await fetch(url, {
+                method: 'GET',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`, // Pastikan token diambil secara dinamis di dalam method ini
+                },
+                cache: 'no-store' 
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+
+            const result = await response.json();
+            return result.data;
+        } catch (error) {
+            console.error("PebService.getAll Error:", error);
+            throw error;
+        }
+    }
+
+    async getAllByMasaTerbit(masaTerbit: string): Promise<PebData[]> {
+        try {
+            const response = await fetch(`${this.baseUrl}?masa_terbit=${masaTerbit}`, {
                 method: 'GET',
                 headers: {
                     'Content-Type': 'application/json',
@@ -58,7 +93,7 @@ class PebService {
         }
     }
 
-    async upload(files: File[]): Promise<UploadPebResponse> {
+    async upload(files: File[], masaTerbit: string): Promise<UploadPebResponse> {
         const formData = new FormData();
         
         // Append semua file ke dalam formData
@@ -67,6 +102,9 @@ class PebService {
             // Ubah dari "files[]" menjadi "files" sesuai error log backend
             formData.append("files", file); 
         });
+
+        // Tambahkan masaTerbit ke formData
+        formData.append("masa_terbit", masaTerbit);
 
         const response = await fetch(`${this.baseUrl}/upload`, {
             method: "POST",
@@ -82,14 +120,23 @@ class PebService {
         }
         const result = await response.json();
 
-        return result.data; // Sesuaikan dengan struktur response API Anda
+        return result; // Sesuaikan dengan struktur response API Anda
     }
 
-  /**
-   * Anda bisa menambahkan method lain di sini nanti, contoh:
-   * async delete(id: string) { ... }
-   * async create(data: FormData) { ... }
-   */
+    async deleteBulk(ids: (number | string)[]): Promise<{ success: boolean; message: string }> {
+        const response = await fetch(`${this.baseUrl}/bulk-delete`, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "Authorization": `Bearer ${token}`,
+            },
+            body: JSON.stringify({ ids }),
+        });
+
+        if (!response.ok) throw new Error("Gagal menghapus data");
+        return response.json();
+    }
+
 }
 
 // Export sebagai singleton

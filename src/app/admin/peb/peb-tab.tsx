@@ -3,8 +3,14 @@
 
 import { useState, DragEvent } from "react"
 import { toast } from "sonner"
-import { pebService } from "@/lib/api/peb.service" // Import service
 import { Loader2 } from "lucide-react"
+import { Button } from "@/components/ui/button"
+import { ButtonGroup } from "@/components/ui/button-group"
+import { Field, FieldLabel } from "@/components/ui/field"
+import { Input } from "@/components/ui/input"
+
+import { pebService } from "@/lib/api/peb.service" // Import service
+import { pebTerbitService } from "@/lib/api/peb-terbit.service";
 
 interface PebTabProps {
   files: File[];
@@ -12,9 +18,24 @@ interface PebTabProps {
   onUploadSuccess: () => Promise<void>;
 }
 
+interface UploadedPebItem {
+  id: number | string;
+  document_number: string;
+}
+
+interface UploadPebResponse {
+  status: string;
+  message: string;
+  data: UploadedPebItem[];
+}
+
 export default function PebTab({ files, setFiles, onUploadSuccess }: PebTabProps) {
   const [isDragging, setIsDragging] = useState(false)
   const [isUploading, setIsUploading] = useState(false)
+  const [masaTerbit, setMasaTerbit] = useState("") // Tambahkan state ini
+
+  const today = new Date();
+  const currentMonth = today.toISOString().slice(0, 7);
   // =============================
   // Helpers
   // =============================
@@ -73,25 +94,33 @@ export default function PebTab({ files, setFiles, onUploadSuccess }: PebTabProps
     }
   }
 
+  const formatMasaTerbit = (value: string) => {
+    if (!value) return ""
+    const [year, month] = value.split("-")
+    const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+    return `${monthNames[parseInt(month) - 1]} ${year}`
+  }
+
   // =============================
   // NEW: Screening handler
   // =============================
+
   const handleScreening = async () => {
+    if (masaTerbit === "") {
+      toast.error("Silakan pilih masa terbit", {position: "top-center"})
+      return
+    }
     if (files.length === 0) return
 
     setIsUploading(true)
     const toastId = toast.loading(`Sedang memproses ${files.length} file...`)
 
     try {
-      await pebService.upload(files)
-      
-      toast.success("Berhasil mengunggah dan screening file", { 
-        id: toastId,
-        position: "top-center" 
-      })
-      
-      setFiles([]) // Bersihkan list setelah sukses
-      // 2. Pemicu update list di tab sebelah secara otomatis
+      await pebService.upload(files, formatMasaTerbit(masaTerbit));
+
+      toast.success("Data berhasil diproses dan disimpan", { id: toastId });
+      setFiles([]);
+      setMasaTerbit("");
       await onUploadSuccess()
 
     } catch (error: unknown) {
@@ -149,7 +178,7 @@ export default function PebTab({ files, setFiles, onUploadSuccess }: PebTabProps
         {/* ================= RIGHT: File List ================= */}
         <div className="w-3/4 rounded-md border p-4 flex flex-col h-[400px]">
           {/* Header */}
-          <div className="flex items-center justify-between mb-4">
+          <div className="flex flex-col items-start gap-3 justify-between mb-4">
             <div>
               <h3 className="text-lg font-medium">List of PEB Files</h3>
               <p className="text-muted-foreground text-xs">
@@ -158,28 +187,29 @@ export default function PebTab({ files, setFiles, onUploadSuccess }: PebTabProps
             </div>
 
             {/* 🔥 ACTION BUTTONS */}
-            <div className="flex items-center gap-2">
-              <button
-                onClick={handleScreening}
-                disabled={files.length === 0 || isUploading}
-                className={`flex items-center gap-2 text-xs px-3 py-1 rounded-md border transition ${
-                  files.length === 0 || isUploading
-                    ? "text-gray-400 border-gray-300 cursor-not-allowed"
-                    : "text-blue-600 border-blue-500 hover:bg-blue-50"
-                }`}
-              >
-                {isUploading && <Loader2 className="h-3 w-3 animate-spin" />}
-                {isUploading ? "Processing..." : "Screening File"}
-              </button>
-
-              {files.length > 0 && (
-                <button
-                  onClick={clearFiles}
-                  className="text-xs text-red-500 hover:underline"
-                >
-                  Clear All
-                </button>
-              )}
+            <div className="flex items-center gap-2 w-full justify-end">
+              <Field>
+                <ButtonGroup>
+                  <Input id="masa_terbit" name="masa_terbit" value={masaTerbit}
+                    max={currentMonth} onChange={(e) => setMasaTerbit(e.target.value)} disabled={files.length === 0 || isUploading} type="month" placeholder="Masa Upload PEB..." required />
+                  <Button variant="outline" 
+                  onClick={handleScreening}
+                  disabled={files.length === 0 || isUploading}
+                  className={`flex items-center gap-2 text-xs px-3 py-1 rounded-md border transition ${
+                    files.length === 0 || isUploading
+                      ? "text-gray-400 border-gray-300 cursor-not-allowed"
+                      : "text-blue-600 border-blue-500 hover:bg-blue-50"
+                  }`}>
+                    {isUploading && <Loader2 className="h-3 w-3 animate-spin" />}
+                    {isUploading ? "Processing..." : "Screening File"}
+                  </Button>
+                  {files.length > 0 && (
+                    <Button variant="outline" className="text-red-500 border-red-500 hover:bg-red-100" onClick={clearFiles}>
+                      Clear All
+                    </Button>
+                  )}
+                </ButtonGroup>
+              </Field>
             </div>
           </div>
 

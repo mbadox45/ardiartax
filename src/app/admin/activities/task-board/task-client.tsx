@@ -81,7 +81,7 @@ export default function TaskClient() {
     return (
         <div className="pb-6 pt-3 px-6 space-y-6">
             {/* Header */}
-            <HeaderPage title="My Task" description="Kelola pekerjaan dan performa kamu" />
+            <HeaderPage title="Activity Task" description="Kelola pekerjaan dan performa kamu" />
 
             {/* Form Task */}
             <div className="flex gap-4 items-start">

@@ -4,6 +4,7 @@
 import { useState } from "react"
 import Cookies from "js-cookie"
 import Link from "next/link" // Pastikan import ini ada
+import { Checkbox } from "@/components/ui/checkbox"
 import { ColumnDef } from "@tanstack/react-table"
 import { Badge } from "@/components/ui/badge"
 import { CheckCircle2, Clock, FileText, Loader2 } from "lucide-react"
@@ -68,6 +69,28 @@ const DocumentNumberCell = ({ row }: { row: Row<PebData> }) => {
 
 export const columns: ColumnDef<PebData>[] = [
   {
+    id: "select",
+    header: ({ table }) => (
+      <Checkbox
+        checked={
+          table.getIsAllPageRowsSelected() ||
+          (table.getIsSomePageRowsSelected() && "indeterminate")
+        }
+        onCheckedChange={(value) => table.toggleAllPageRowsSelected(!!value)}
+        aria-label="Select all"
+      />
+    ),
+    cell: ({ row }) => (
+      <Checkbox
+        checked={row.getIsSelected()}
+        onCheckedChange={(value) => row.toggleSelected(!!value)}
+        aria-label="Select row"
+      />
+    ),
+    enableSorting: false,
+    enableHiding: false,
+  },
+  {
     accessorKey: "document_number",
     header: "Nomor Dokumen",
     cell: ({ row }) => <DocumentNumberCell row={row} />,
@@ -127,17 +150,17 @@ export const columns: ColumnDef<PebData>[] = [
     },
   },
   {
-    accessorKey: "status",
-    header: "Status",
+    accessorKey: "masa_terbit",
+    header: "Masa Terbit",
     cell: ({ row }) => {
-      const status = row.getValue("status") as string
+      const masaTerbit = row.getValue("masa_terbit") as string
       return (
         <Badge 
-          variant={status === "Disetujui" ? "default" : "secondary"}
-          className="gap-1 bg-green-600"
+          variant={masaTerbit === "Disetujui" ? "default" : "secondary"}
+          className="gap-1 bg-green-700 text-white text-xs"
         >
-          {status === "Disetujui" ? <CheckCircle2 className="size-3" /> : <Clock className="size-3" />}
-          {status}
+          {masaTerbit != "" ? <CheckCircle2 className="size-3" /> : <Clock className="size-3" />}
+          {masaTerbit || "Belum Terbit"}
         </Badge>
       )
     },
