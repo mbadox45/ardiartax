@@ -1,11 +1,8 @@
-// src/app/admin/peb/list-peb-tab.tsx
 "use client"
-import { useEffect, useState } from "react"
+import { useEffect, useState, useRef, useImperativeHandle, forwardRef } from "react"
 import { UniversalDataTable } from "@/components/layout/universal-data-table"
 import { columns, PebData } from "./columns"
-import { pebService } from "@/lib/api/peb.service" // Import service
-import { Loader2, AlertCircle } from "lucide-react"
-import { toast } from "sonner"
+import { Loader2 } from "lucide-react"
 
 interface ListPebTabProps {
     data: PebData[]
@@ -14,39 +11,56 @@ interface ListPebTabProps {
     setSelectedIds: (ids: (string | number)[]) => void
 }
 
-export default function ListPebTab({ data, isLoading, selectedIds, setSelectedIds }: ListPebTabProps) {
-    const [rowSelection, setRowSelection] = useState({})
-    const [error, setError] = useState<string | null>(null)
+// Gunakan forwardRef agar parent (PebClient) bisa memanggil fungsi di sini
+export const ListPebTab = forwardRef<{ resetSelection: () => void }, ListPebTabProps>(
+    ({ data, isLoading, selectedIds, setSelectedIds }, ref) => {
+        const [rowSelection, setRowSelection] = useState({})
+        const lastSentIdsRef = useRef<string>("")
 
-    useEffect(() => {
-        const selectedRows = Object.keys(rowSelection)
-        const selectedRealIds = selectedRows.map((index) => {
-            const rowIndex = parseInt(index)
-            return data[rowIndex]?.id // Ambil ID dari data asli berdasarkan index
-        }).filter(Boolean) // Pastikan ID tidak undefined
+        // Mengekspos fungsi ke parent melalui ref
+        useImperativeHandle(ref, () => ({
+            resetSelection: () => {
+                setRowSelection({})
+                lastSentIdsRef.current = JSON.stringify([])
+            }
+        }))
 
-        setSelectedIds(selectedRealIds)
-    }, [rowSelection, data, setSelectedIds])
+        // Sinkronisasi SEARAH: UI (rowSelection) -> Parent (selectedIds)
+        useEffect(() => {
+            const selectedIndices = Object.keys(rowSelection)
+            const currentIds = selectedIndices
+                .map((index) => data[parseInt(index)]?.id)
+                .filter(Boolean) as (string | number)[]
 
-    // Reset seleksi jika data di-refresh atau dihapus
-    useEffect(() => {
-        if (selectedIds.length === 0) {
-            setRowSelection({}) // Reset seleksi
+            const idsString = JSON.stringify(currentIds)
+
+            // Hanya update jika data benar-benar berubah untuk performa
+            if (idsString !== lastSentIdsRef.current) {
+                lastSentIdsRef.current = idsString
+                setSelectedIds(currentIds)
+            }
+        }, [rowSelection, data, setSelectedIds])
+
+        if (isLoading) {
+            return (
+                <div className="flex h-[300px] flex-col items-center justify-center gap-2">
+                    <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                    <p className="text-sm text-muted-foreground">Memuat data PEB...</p>
+                </div>
+            )
         }
-    }, [selectedIds.length])
-    
-    if (isLoading) {
+
         return (
-            <div className="flex h-[300px] flex-col items-center justify-center gap-2">
-                <Loader2 className="h-8 w-8 animate-spin text-primary" />
-                <p className="text-sm text-muted-foreground">Menghubungkan ke server...</p>
+            <div className="py-4">
+                <UniversalDataTable 
+                    columns={columns} 
+                    data={data} 
+                    rowSelection={rowSelection} 
+                    onRowSelectionChange={setRowSelection} 
+                />
             </div>
         )
     }
+)
 
-    return (
-        <div className="py-4">
-            <UniversalDataTable columns={columns}  data={data}  />
-        </div>
-    )
-}
+ListPebTab.displayName = "ListPebTab"

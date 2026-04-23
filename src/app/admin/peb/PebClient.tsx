@@ -1,7 +1,7 @@
 // src/app/admin/peb/PebClient.tsx
 
 "use client"
-import { useState, useCallback, useEffect, useMemo } from "react"
+import { useState, useCallback, useEffect, useMemo, useRef } from "react"
 import {
   Tooltip,
   TooltipContent,
@@ -34,13 +34,15 @@ import {
 import { ListCheck, Upload, FileCode, FileSpreadsheet, Trash, Search } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { ButtonGroup } from "@/components/ui/button-group"
+import { toast } from "sonner"
+
 
 // Components
 import HeaderPage from "@/components/layout/header-page"
 import PebTab from "./peb-tab"
-import ListPebTab from "./list-peb-tab"
+import {ListPebTab} from "./list-peb-tab"
 import { PebData } from "./columns"
-import { handleExportExcel } from "@/lib/controllers/peb.controller"
+import { handleExportExcel, handleExportXml } from "@/lib/controllers/peb.controller"
 
 // API
 import { pebService } from "@/lib/api/peb.service"
@@ -54,6 +56,8 @@ const formatToMasaPajak = (dateString: string) => {
 };
 
 export default function PebClient() {
+    const [selectedIds, setSelectedIds] = useState<(string | number)[]>([])
+    const listPebRef = useRef<{ resetSelection: () => void }>(null)
     const [pebFiles, setPebFiles] = useState<File[]>([])
     const [dataPeb, setDataPeb] = useState<PebData[]>([])
     const [dataPebOri, setDataPebOri] = useState<PebData[]>([])
@@ -68,6 +72,33 @@ export default function PebClient() {
 
     const today = new Date();
     const currentMonth = today.toISOString().slice(0, 7);
+
+    const handleDeleteBulk = async () => {
+        if (selectedIds.length === 0) {
+            toast.error("Silakan pilih data terlebih dahulu", {position: "top-center"})
+            return;
+        }
+            
+        const confirmDelete = window.confirm(`Apakah Anda yakin ingin menghapus ${selectedIds.length} data terpilih?`);
+        if (!confirmDelete) return;
+
+        setIsLoading(true);
+        try {
+            console.log(selectedIds);
+            // Panggil API delete bulk (pastikan sudah dibuat di pebService)
+            await pebService.deleteBulk(selectedIds);
+            toast.success("Data berhasil dihapus secara permanen", {position: "top-center"});
+            
+            // Reset state dan refresh data
+            setSelectedIds([]);
+            listPebRef.current?.resetSelection()
+            fetchPebList();
+        } catch (error) {
+            toast.error("Gagal menghapus data.");
+        } finally {
+            setIsLoading(false);
+        }
+    };
     
     // Gunakan useCallback agar fungsi tidak dibuat ulang setiap render
     const fetchPebList = useCallback(async () => {
@@ -167,7 +198,7 @@ export default function PebClient() {
                                     <ButtonGroup>
                                         <Tooltip>
                                             <TooltipTrigger asChild>
-                                                <Button variant="outline" size="lg" className="bg-gray-600 text-white hover:text-gray-600 cursor-pointer"><FileCode /></Button>
+                                                <Button variant="outline" size="lg" className="bg-gray-600 text-white hover:text-gray-600 cursor-pointer" onClick={() => handleExportXml(dataPebOri)}><FileCode /></Button>
                                             </TooltipTrigger>
                                             <TooltipContent>
                                                 <p>Export by XML Data</p>
@@ -185,7 +216,7 @@ export default function PebClient() {
                                         </Tooltip>
                                         <Tooltip>
                                             <TooltipTrigger asChild>
-                                                <Button variant="outline" size="lg" className="bg-pink-700 text-white hover:text-pink-600 cursor-pointer"><Trash /></Button>
+                                                <Button variant="outline" size="lg" className="bg-pink-700 text-white hover:text-pink-600 cursor-pointer" disabled={selectedIds.length === 0 ? true : false} onClick={handleDeleteBulk} ><Trash /></Button>
                                             </TooltipTrigger>
                                             <TooltipContent>
                                                 <p>Delete Data</p>
@@ -194,7 +225,7 @@ export default function PebClient() {
                                     </ButtonGroup>
                                 </div>
                             </div>
-                            <ListPebTab data={filteredData} isLoading={isLoading} />
+                            <ListPebTab ref={listPebRef} data={filteredData} isLoading={isLoading} selectedIds={selectedIds} setSelectedIds={setSelectedIds} />
                         </CardContent>
                     </Card>
                 </TabsContent>

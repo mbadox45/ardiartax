@@ -7,10 +7,12 @@ import {
   getCoreRowModel,
   getPaginationRowModel,
   getSortedRowModel,
-  getFilteredRowModel, // Tambahkan ini
+  getFilteredRowModel,
   useReactTable,
   type ColumnDef,
   type SortingState,
+  type OnChangeFn,
+  type RowSelectionState,
 } from "@tanstack/react-table"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Button } from "@/components/ui/button"
@@ -18,17 +20,21 @@ import { Button } from "@/components/ui/button"
 interface UniversalDataTableProps<TData, TValue> {
   columns: ColumnDef<TData, TValue>[]
   data: TData[]
-  // Tambahkan props ini agar parent bisa memantau item yang dipilih
+  // Tambahkan kedua props ini untuk sinkronisasi checkbox
+  rowSelection?: RowSelectionState
+  onRowSelectionChange?: OnChangeFn<RowSelectionState>
+  // Callback lama tetap dipertahankan jika Anda membutuhkannya
   onSelectionChange?: (selectedRows: TData[]) => void 
 }
 
 export function UniversalDataTable<TData, TValue>({
   columns,
   data,
+  rowSelection = {}, // Default ke object kosong jika tidak dikirim
+  onRowSelectionChange,
   onSelectionChange
 }: UniversalDataTableProps<TData, TValue>) {
   const [sorting, setSorting] = React.useState<SortingState>([])
-  const [rowSelection, setRowSelection] = React.useState({}) // State untuk checkbox
 
   const table = useReactTable({
     data,
@@ -38,14 +44,15 @@ export function UniversalDataTable<TData, TValue>({
     onSortingChange: setSorting,
     getSortedRowModel: getSortedRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
-    onRowSelectionChange: setRowSelection, // Sinkronisasi state
+    // Gunakan fungsi pengubah state dari props (ListPebTab)
+    onRowSelectionChange: onRowSelectionChange, 
     state: {
       sorting,
-      rowSelection, // Masukkan ke state table
+      rowSelection, // Gunakan state dari props (ListPebTab)
     },
   })
 
-  // Efek untuk mengirim data terpilih kembali ke parent component
+  // Efek ini akan berjalan setiap kali rowSelection di Parent berubah
   React.useEffect(() => {
     if (onSelectionChange) {
       const selectedData = table.getFilteredSelectedRowModel().rows.map((row) => row.original)
@@ -55,15 +62,13 @@ export function UniversalDataTable<TData, TValue>({
 
   return (
     <div className="space-y-4">
-      
-
       <div className="rounded-md border">
         <Table>
           <TableHeader>
             {table.getHeaderGroups().map((headerGroup) => (
-              <TableRow key={headerGroup.id} className="font-bold">
+              <TableRow key={headerGroup.id} className="bg-muted/50">
                 {headerGroup.headers.map((header) => (
-                  <TableHead key={header.id} className="font-bold text-xs">
+                  <TableHead key={header.id} className="font-bold text-xs uppercase text-foreground">
                     {header.isPlaceholder
                       ? null
                       : flexRender(header.column.columnDef.header, header.getContext())}
@@ -77,11 +82,11 @@ export function UniversalDataTable<TData, TValue>({
               table.getRowModel().rows.map((row) => (
                 <TableRow 
                   key={row.id} 
-                  className="text-xs"
-                  data-state={row.getIsSelected() && "selected"} // Style row saat terpilih
+                  className="text-xs transition-colors hover:bg-muted/30"
+                  data-state={row.getIsSelected() && "selected"}
                 >
                   {row.getVisibleCells().map((cell) => (
-                    <TableCell key={cell.id} className="whitespace-nowrap">
+                    <TableCell key={cell.id} className="whitespace-nowrap py-3">
                       {flexRender(cell.column.columnDef.cell, cell.getContext())}
                     </TableCell>
                   ))}
@@ -89,8 +94,8 @@ export function UniversalDataTable<TData, TValue>({
               ))
             ) : (
               <TableRow>
-                <TableCell colSpan={columns.length} className="h-24 text-center">
-                  No results.
+                <TableCell colSpan={columns.length} className="h-24 text-center text-muted-foreground">
+                  Data tidak ditemukan.
                 </TableCell>
               </TableRow>
             )}
@@ -98,17 +103,16 @@ export function UniversalDataTable<TData, TValue>({
         </Table>
       </div>
 
-      <div className="flex justify-between py-2">
-        {/* Keterangan jumlah terpilih */}
-        <div className="text-xs text-muted-foreground px-2">
-          {table.getFilteredSelectedRowModel().rows.length} of{" "}
-          {table.getFilteredRowModel().rows.length} row(s) selected.
+      <div className="flex items-center justify-between py-2">
+        <div className="text-[11px] text-muted-foreground px-2 italic">
+          {table.getFilteredSelectedRowModel().rows.length} dari{" "}
+          {table.getFilteredRowModel().rows.length} baris dipilih.
         </div>
-        {/* Pagination Controls tetap sama */}
-        <div className="flex items-center justify-end space-x-2">
+        <div className="flex items-center space-x-2">
           <Button
             variant="outline"
             size="sm"
+            className="h-8 text-xs"
             onClick={() => table.previousPage()}
             disabled={!table.getCanPreviousPage()}
           >
@@ -117,6 +121,7 @@ export function UniversalDataTable<TData, TValue>({
           <Button
             variant="outline"
             size="sm"
+            className="h-8 text-xs"
             onClick={() => table.nextPage()}
             disabled={!table.getCanNextPage()}
           >

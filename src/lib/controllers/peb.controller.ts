@@ -3,6 +3,9 @@ import { PebData } from "../api/peb.service";
 import { toast } from "sonner"
 import { pebService } from "@/lib/api/peb.service"
 
+export const handleExportXml = (data: PebData[]) => {
+    toast.info("Konten XML Belum Tersedia", {position: "top-center"});
+};
 
 export const handleExportExcel = (data: PebData[]) => {
     if (data.length === 0) return alert("Tidak ada data untuk diekspor");
