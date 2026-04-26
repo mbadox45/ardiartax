@@ -1,5 +1,7 @@
 // src/app/admin/documents/my-documents/_components/document-views.tsx
-import { FolderIcon, FileText, MoreVertical } from "lucide-react"
+import { FolderIcon, FileText, MoreVertical, Trash2 } from "lucide-react"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import { Button } from "@/components/ui/button"
 
 interface DocumentItem {
   id: string | number
@@ -13,10 +15,11 @@ interface ViewProps {
   documents: DocumentItem[]
   onFolderClick: (folder: DocumentItem) => void
   formatSize: (size: number | string) => string
+  onDelete: (item: DocumentItem) => void // Tambahkan ini
 }
 
 // --- GRID VIEW COMPONENT ---
-export function GridView({ documents, onFolderClick, formatSize }: ViewProps) {
+export function GridView({ documents, onFolderClick, formatSize, onDelete }: ViewProps) {
   return (
     <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
       {documents.map((item) => (
@@ -31,7 +34,19 @@ export function GridView({ documents, onFolderClick, formatSize }: ViewProps) {
             ) : (
               <FileText className="w-10 h-10 text-blue-500" />
             )}
-            <MoreVertical className="w-4 h-4 text-muted-foreground opacity-0 group-hover:opacity-100" />
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon" className="h-8 w-8">
+                  <MoreVertical className="w-4 h-4 text-muted-foreground" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={() => onDelete(item)} className="text-destructive">
+                  <Trash2 className="w-4 h-4 mr-2" /> Hapus
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+            {/* <MoreVertical className="w-4 h-4 text-muted-foreground opacity-0 group-hover:opacity-100" /> */}
           </div>
           <span className="text-sm font-medium truncate mb-1">{item.name}</span>
           <span className="text-[10px] text-muted-foreground">
@@ -44,7 +59,7 @@ export function GridView({ documents, onFolderClick, formatSize }: ViewProps) {
 }
 
 // --- LIST VIEW COMPONENT ---
-export function ListView({ documents, onFolderClick, formatSize }: ViewProps) {
+export function ListView({ documents, onFolderClick, formatSize, onDelete }: ViewProps) {
   return (
     <div className="bg-white border rounded-xl overflow-hidden shadow-sm">
       <table className="w-full text-sm">
@@ -78,7 +93,19 @@ export function ListView({ documents, onFolderClick, formatSize }: ViewProps) {
                 {item.is_folder ? "--" : formatSize(item.size)}
               </td>
               <td className="p-3">
-                <MoreVertical className="w-4 h-4 opacity-0 group-hover:opacity-100" />
+                {/* <MoreVertical className="w-4 h-4 opacity-0 group-hover:opacity-100" /> */}
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" size="icon" className="h-8 w-8">
+                      <MoreVertical className="w-4 h-4 text-muted-foreground" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem onClick={() => onDelete(item)} className="text-destructive">
+                      <Trash2 className="w-4 h-4 mr-2" /> Hapus
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
               </td>
             </tr>
           ))}

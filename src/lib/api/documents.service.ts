@@ -53,20 +53,73 @@ class DocumentService {
         method: "POST",
         headers: this.headers,
         body: JSON.stringify({
-          is_shared: false, // default value
+          is_shared: false,
           ...payload
         }),
       });
 
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.message || "Gagal membuat folder");
+      // Jika berhasil, jangan langsung .json() jika body mungkin kosong
+      if (response.ok) {
+        // Cek apakah ada konten sebelum parsing
+        const contentType = response.headers.get("content-type");
+        if (contentType && contentType.includes("application/json")) {
+          return await response.json();
+        }
+        return { success: true }; // Fallback jika body kosong
       }
 
-      return await response.json();
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.message || "Gagal membuat folder");
     } catch (error) {
-      console.error("DocumentService.createFolder Error:", error);
+      // LOGIKA DEBUGGING:
+      // Jika data berhasil masuk tapi tetap error, kemungkinan besar ini
+      console.error("Fetch error details:", error);
+      
+      // Jika error adalah 'Failed to fetch' tapi Anda tahu server memprosesnya,
+      // ini seringkali masalah network/CORS di sisi backend.
       throw error;
+    }
+  }
+  // async createFolder(payload: CreateFolderPayload) {
+  //   try {
+  //     const response = await fetch(`${this.baseUrl}/documents/folder`, {
+  //       method: "POST",
+  //       headers: this.headers,
+  //       body: JSON.stringify({
+  //         is_shared: false, // default value
+  //         ...payload
+  //       }),
+  //     });
+
+  //     if (!response.ok) {
+  //       const errorData = await response.json().catch(() => ({}));
+  //       throw new Error(errorData.message || "Gagal membuat folder");
+  //     }
+
+  //     return await response.json();
+  //   } catch (error) {
+  //     console.error("DocumentService.createFolder Error:", error);
+  //     throw error;
+  //   }
+  // }
+
+  // Tambahkan ini di dalam class DocumentService
+  async deleteDocument(documentId: string | number) {
+    try {
+        const response = await fetch(`${this.baseUrl}/documents/${documentId}`, {
+            method: "DELETE",
+            headers: this.headers,
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            throw new Error(errorData.message || "Gagal menghapus dokumen");
+        }
+
+        return await response.json();
+    } catch (error) {
+        console.error("DocumentService.deleteDocument Error:", error);
+        throw error;
     }
   }
 }

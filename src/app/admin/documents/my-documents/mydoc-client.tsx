@@ -45,6 +45,7 @@ import Cookies from "js-cookie"
 
 // Service
 import { documentService } from "@/lib/api/documents.service"
+import { DeleteConfirmDialog } from "./delete-confirm-dialog"
 
 // Interface untuk tipe data API
 interface DocumentItem {
@@ -62,6 +63,10 @@ interface PathItem {
 }
 
 export default function MyDocClient() {
+    // Tambahkan state baru
+    const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
+    const [selectedItem, setSelectedItem] = useState<DocumentItem | null>(null)
+    
     const [currentFolderId, setCurrentFolderId] = useState<string | number>(0)
     const [path, setPath] = useState<PathItem[]>([{ id: 0, name: "Root" }])
 
@@ -166,6 +171,24 @@ export default function MyDocClient() {
         }
     }
 
+    // Handler Hapus
+    const handleDelete = async () => {
+        if (!selectedItem) return
+        try {
+            await documentService.deleteDocument(selectedItem.id)
+            toast.success(`${selectedItem.name} berhasil dihapus`)
+            fetchDocuments(currentFolderId)
+        } catch (error: unknown) {
+            const msg = error instanceof Error ? error.message : "Gagal menghapus"
+            toast.error(msg)
+        }
+    }
+
+    const openDeleteConfirm = (item: DocumentItem) => {
+        setSelectedItem(item)
+        setDeleteDialogOpen(true)
+    }
+
     return (
         <div 
             className={`min-h-screen pb-6 pt-3 px-6 space-y-4 transition-colors ${isDragging ? "bg-blue-50/50" : ""}`}
@@ -266,15 +289,24 @@ export default function MyDocClient() {
                         documents={documents} 
                         onFolderClick={handleFolderClick} 
                         formatSize={formatSize} 
+                        onDelete={openDeleteConfirm} // Pass handler
                     />
                 ) : (
                     <ListView 
                         documents={documents} 
                         onFolderClick={handleFolderClick} 
                         formatSize={formatSize} 
+                        onDelete={openDeleteConfirm} // Pass handler
                     />
                 )}
             </div>
+
+            <DeleteConfirmDialog 
+                isOpen={deleteDialogOpen}
+                onOpenChange={setDeleteDialogOpen}
+                onConfirm={handleDelete}
+                itemName={selectedItem?.name || ""}
+            />
 
             {/* Modal Dialog New Folder */}
             <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
