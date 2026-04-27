@@ -3,21 +3,18 @@
 "use client"
 
 import { useState, DragEvent, useRef, useEffect, useCallback } from "react"
+import { useRouter, useSearchParams } from "next/navigation"
 import { 
   FolderIcon, 
-  MoreVertical, 
   Plus, 
   Search, 
   Grid2X2, 
   List, 
-  Download, 
-  Trash2,
-  FileText,
   UploadCloud,
   FilePlus,
   FolderPlus,
   Loader2,
-  ChevronRight
+  ChevronRight,
 } from "lucide-react"
 
 // Components
@@ -41,20 +38,19 @@ import {
 } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
 import { toast } from "sonner"
-import Cookies from "js-cookie"
 
 // Service
 import { documentService } from "@/lib/api/documents.service"
 import { DeleteConfirmDialog } from "./delete-confirm-dialog"
+import { encryptData, decryptData } from "@/lib/crypto"
 
-// Interface untuk tipe data API
 interface DocumentItem {
     id: string | number
     name: string
-    size: number | string
+    file_size: number | string
+    file_type: string
     is_folder: boolean
     updated_at: string
-    // tambahkan field lain sesuai respon API Anda
 }
 
 interface PathItem {
@@ -63,85 +59,153 @@ interface PathItem {
 }
 
 export default function MyDocClient() {
-    // Tambahkan state baru
+    const router = useRouter()
+    const searchParams = useSearchParams()
+    
+    // --- STATE INITIALIZATION ---
+    // Gunakan nilai default Root agar server & client render awal sama (cegah hydration error)
+    const [path, setPath] = useState<PathItem[]>([{ id: 0, name: "Root" }])
+    const [currentFolderId, setCurrentFolderId] = useState<string | number>(0)
+    const [isMounted, setIsMounted] = useState(false)
+    
     const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
     const [selectedItem, setSelectedItem] = useState<DocumentItem | null>(null)
-    
-    const [currentFolderId, setCurrentFolderId] = useState<string | number>(0)
-    const [path, setPath] = useState<PathItem[]>([{ id: 0, name: "Root" }])
-
     const [isDragging, setIsDragging] = useState(false)
     const [viewMode, setViewMode] = useState<"grid" | "list">("grid")
     const fileInputRef = useRef<HTMLInputElement>(null)
     
-    // API States
     const [documents, setDocuments] = useState<DocumentItem[]>([])
     const [isLoading, setIsLoading] = useState(true)
     
-    // New Folder States
     const [isDialogOpen, setIsDialogOpen] = useState(false)
     const [folderName, setFolderName] = useState("")
     const [isSubmitting, setIsSubmitting] = useState(false)
 
-    // --- 1. Fungsi Get Documents ---
+    // --- HYDRATION FIX: Sync URL data after mount ---
+    useEffect(() => {
+        setIsMounted(true)
+        const p = searchParams.get("p")
+        if (p) {
+            const decodedPath = decryptData(p)
+            if (decodedPath && Array.isArray(decodedPath)) {
+                setPath(decodedPath)
+                setCurrentFolderId(decodedPath[decodedPath.length - 1].id)
+            }
+        }
+    }, [])
+
+    const syncUrl = useCallback((newPath: PathItem[]) => {
+        const lastId = newPath[newPath.length - 1].id
+        if (lastId === 0) {
+            router.push("/admin/documents/my-documents")
+        } else {
+            const encryptedPath = encryptData(newPath)
+            router.push(`/admin/documents/my-documents?p=${encryptedPath}`)
+        }
+    }, [router])
+
     const fetchDocuments = useCallback(async (parentId: string | number = 0) => {
         setIsLoading(true)
         try {
             const data = await documentService.getDocuments(parentId)
             setDocuments(data)
         } catch (error: unknown) {
-            // Melakukan pengecekan apakah error adalah instance dari class Error
-            const errorMessage = error instanceof Error 
-                ? error.message 
-                : "Terjadi kesalahan koneksi"
-                
+            const errorMessage = error instanceof Error ? error.message : "Terjadi kesalahan koneksi"
             toast.error(errorMessage)
-            console.error(error)
         } finally {
             setIsLoading(false)
         }
     }, [])
 
+    // Tunggu mounted sebelum fetch untuk memastikan currentFolderId sudah benar dari URL
     useEffect(() => {
-        fetchDocuments(currentFolderId)
-    }, [currentFolderId, fetchDocuments])
+        if (isMounted) {
+            fetchDocuments(currentFolderId)
+        }
+    }, [currentFolderId, fetchDocuments, isMounted])
 
-    // --- HANDLER MASUK KE FOLDER ---
+    const handleUpload = async (files: FileList | null) => {
+        if (!files || files.length === 0) return;
+
+        // Tampilkan loading toast
+        const toastId = toast.loading(`Sedang mengunggah ${files.length} file...`);
+        setIsLoading(true); // Opsional: agar muncul spinner di area konten
+
+        try {
+            await documentService.uploadFiles(files, currentFolderId);
+            
+            toast.success("File berhasil diunggah", { id: toastId });
+            // Refresh daftar dokumen
+            fetchDocuments(currentFolderId);
+        } catch (error: unknown) {
+            const msg = error instanceof Error ? error.message : "Gagal upload";
+            toast.error(msg, { id: toastId });
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const handleDrop = (e: DragEvent<HTMLDivElement>) => {
+        e.preventDefault();
+        setIsDragging(false);
+        
+        const files = e.dataTransfer.files;
+        if (files && files.length > 0) {
+            handleUpload(files);
+        }
+    };
+
+    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        handleUpload(e.target.files);
+        // Reset input agar bisa upload file yang sama lagi jika perlu
+        e.target.value = "";
+    };
+
     const handleFolderClick = (folder: DocumentItem) => {
         if (folder.is_folder) {
+            const newPath = [...path, { id: folder.id, name: folder.name }]
+            setPath(newPath)
             setCurrentFolderId(folder.id)
-            setPath([...path, { id: folder.id, name: folder.name }])
+            syncUrl(newPath)
         }
     }
 
-    // --- HANDLER NAVIGASI BREADCRUMB ---
     const navigateToPath = (index: number) => {
         const newPath = path.slice(0, index + 1)
         const target = newPath[newPath.length - 1]
         setPath(newPath)
         setCurrentFolderId(target.id)
+        syncUrl(newPath)
     }
 
-    // --- 2. Helper Format Size ---
+    useEffect(() => {
+        const handlePopState = () => {
+            const params = new URLSearchParams(window.location.search)
+            const pathParam = params.get("p")
+            if (pathParam) {
+                const decodedPath = decryptData(pathParam)
+                if (decodedPath) {
+                    setPath(decodedPath)
+                    setCurrentFolderId(decodedPath[decodedPath.length - 1].id)
+                }
+            } else {
+                setPath([{ id: 0, name: "Root" }])
+                setCurrentFolderId(0)
+            }
+        }
+        window.addEventListener("popstate", handlePopState)
+        return () => window.removeEventListener("popstate", handlePopState)
+    }, [])
+
     const formatSize = (size: number | string) => {
         if (typeof size === "string") return size
         if (size === 0) return "0 Bytes"
         const k = 1024
         const sizes = ["Bytes", "KB", "MB", "GB"]
-        const i = Math.floor(Math.log(size) / Math.log(k))
-        return parseFloat((size / Math.pow(k, i)).toFixed(2)) + " " + sizes[i]
+        const i = Math.floor(Math.log(Number(size)) / Math.log(k))
+        return parseFloat((Number(size) / Math.pow(k, i)).toFixed(2)) + " " + sizes[i]
     }
 
-    const handleDragOver = (e: DragEvent<HTMLDivElement>) => {
-        e.preventDefault()
-        setIsDragging(true)
-    }
-
-    const handleDragLeave = () => setIsDragging(false)
-
-    const handleUploadClick = () => fileInputRef.current?.click()
-
-    // API Post Handler (Modified to trigger refresh)
     const handleCreateFolder = async (e: React.FormEvent) => {
         e.preventDefault()
         if (!folderName.trim()) return
@@ -153,25 +217,18 @@ export default function MyDocClient() {
                 parent_id: currentFolderId,
                 is_folder: true
             })
-
             toast.success(`Folder "${folderName}" berhasil dibuat`)
             setIsDialogOpen(false)
             setFolderName("")
-            fetchDocuments(currentFolderId) // Refresh list
+            fetchDocuments(currentFolderId)
         } catch (error: unknown) {
-            // Melakukan pengecekan apakah error adalah instance dari class Error
-            const errorMessage = error instanceof Error 
-                ? error.message 
-                : "Gagal menyimpan folder"
-                
+            const errorMessage = error instanceof Error ? error.message : "Gagal menyimpan folder"
             toast.error(errorMessage)
-            console.error(error)
         } finally {
             setIsSubmitting(false)
         }
     }
 
-    // Handler Hapus
     const handleDelete = async () => {
         if (!selectedItem) return
         try {
@@ -189,14 +246,20 @@ export default function MyDocClient() {
         setDeleteDialogOpen(true)
     }
 
+    // Hindari flicker konten yang salah sebelum mount selesai
+    if (!isMounted) return (
+        <div className="flex items-center justify-center min-h-screen">
+            <Loader2 className="w-10 h-10 animate-spin text-blue-600" />
+        </div>
+    )
+
     return (
         <div 
             className={`min-h-screen pb-6 pt-3 px-6 space-y-4 transition-colors ${isDragging ? "bg-blue-50/50" : ""}`}
-            onDragOver={handleDragOver}
-            onDragLeave={handleDragLeave}
-            onDrop={(e) => { e.preventDefault(); setIsDragging(false); }}
+            onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
+            onDragLeave={() => setIsDragging(false)}
+            onDrop={handleDrop}
         >
-            {/* Overlay Drag & Drop */}
             {isDragging && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-blue-500/10 backdrop-blur-sm pointer-events-none">
                     <div className="bg-white p-8 rounded-xl shadow-2xl border-2 border-dashed border-blue-500 flex flex-col items-center gap-4">
@@ -206,11 +269,18 @@ export default function MyDocClient() {
                 </div>
             )}
 
-            <HeaderPage title="My Documents" description="Kelola dan simpan dokumen perusahaan secara aman" />
+            {/* Input file tersembunyi */}
+            <input 
+                type="file" 
+                ref={fileInputRef} 
+                className="hidden" 
+                multiple 
+                onChange={handleFileChange} // Tambahkan onChange
+            />
 
+            <HeaderPage title="My Documents" description="Kelola dan simpan dokumen perusahaan secara aman" />
             <input type="file" ref={fileInputRef} className="hidden" multiple />
 
-            {/* Toolbar */}
             <div className="flex items-center justify-between gap-4 bg-white p-2 rounded-lg border shadow-sm">
                 <div className="relative flex-1 max-w-md">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
@@ -248,7 +318,7 @@ export default function MyDocClient() {
                                 <span>Folder baru</span>
                             </DropdownMenuItem>
                             <div className="h-px bg-muted my-1" />
-                            <DropdownMenuItem onClick={handleUploadClick} className="gap-3 py-2.5 cursor-pointer rounded-lg">
+                            <DropdownMenuItem onClick={() => fileInputRef.current?.click()} className="gap-3 py-2.5 cursor-pointer rounded-lg">
                                 <FilePlus className="w-4 h-4 text-muted-foreground" />
                                 <span>Upload file</span>
                             </DropdownMenuItem>
@@ -257,7 +327,7 @@ export default function MyDocClient() {
                 </div>
             </div>
 
-            {/* --- DINAMIS BREADCRUMBS --- */}
+            {/* Breadcrumbs */}
             <div className="flex items-center gap-1 text-sm text-muted-foreground px-1 overflow-x-auto no-scrollbar">
                 <span className="select-none whitespace-nowrap">My Drive</span>
                 {path.map((item, index) => (
@@ -273,7 +343,14 @@ export default function MyDocClient() {
                 ))}
             </div>
 
-            {/* --- CONTENT AREA (Update onClick) --- */}
+            {/* Tips: Anda bisa menambahkan informasi visual saat loading upload */}
+            {isLoading && (
+                <div className="fixed bottom-4 right-4 bg-white p-4 rounded-lg shadow-lg border flex items-center gap-3 z-50">
+                    <Loader2 className="w-5 h-5 animate-spin text-blue-600" />
+                    <span className="text-sm font-medium">Memproses dokumen...</span>
+                </div>
+            )}
+
             <div className="w-full">
                 {isLoading ? (
                     <div className="flex flex-col items-center justify-center py-20 gap-3">
@@ -285,30 +362,14 @@ export default function MyDocClient() {
                         <p>Folder ini kosong</p>
                     </div>
                 ) : viewMode === "grid" ? (
-                    <GridView 
-                        documents={documents} 
-                        onFolderClick={handleFolderClick} 
-                        formatSize={formatSize} 
-                        onDelete={openDeleteConfirm} // Pass handler
-                    />
+                    <GridView documents={documents} onFolderClick={handleFolderClick} formatSize={formatSize} onDelete={openDeleteConfirm} />
                 ) : (
-                    <ListView 
-                        documents={documents} 
-                        onFolderClick={handleFolderClick} 
-                        formatSize={formatSize} 
-                        onDelete={openDeleteConfirm} // Pass handler
-                    />
+                    <ListView documents={documents} onFolderClick={handleFolderClick} formatSize={formatSize} onDelete={openDeleteConfirm} />
                 )}
             </div>
 
-            <DeleteConfirmDialog 
-                isOpen={deleteDialogOpen}
-                onOpenChange={setDeleteDialogOpen}
-                onConfirm={handleDelete}
-                itemName={selectedItem?.name || ""}
-            />
+            <DeleteConfirmDialog isOpen={deleteDialogOpen} onOpenChange={setDeleteDialogOpen} onConfirm={handleDelete} itemName={selectedItem?.name || ""} />
 
-            {/* Modal Dialog New Folder */}
             <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
                 <DialogContent className="sm:max-w-[425px]">
                     <form onSubmit={handleCreateFolder}>

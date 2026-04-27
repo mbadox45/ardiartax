@@ -44,6 +44,41 @@ class DocumentService {
     }
   }
 
+  async uploadFiles(files: FileList | File[], parentId: string | number) {
+    const formData = new FormData();
+    
+    // Masukkan semua file ke formData
+    Array.from(files).forEach((file) => {
+      formData.append("files", file); // Sesuaikan key "files" dengan ekspektasi backend
+    });
+
+    // Masukkan metadata tambahan
+    formData.append("parent_id", String(parentId));
+    formData.append("is_shared", "false");
+
+    try {
+      const response = await fetch(`${this.baseUrl}/documents/upload`, {
+        method: "POST",
+        headers: {
+          // PENTING: Jangan set Content-Type manual saat mengirim FormData
+          // agar browser bisa otomatis menentukan boundary-nya.
+          "Authorization": `Bearer ${Cookies.get("access_token")}`,
+        },
+        body: formData,
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || "Gagal mengunggah file");
+      }
+
+      return await response.json();
+    } catch (error: unknown) {
+      if (error instanceof Error) throw error;
+      throw new Error("Terjadi kesalahan saat upload");
+    }
+  }
+
   /**
    * Membuat folder baru
    */
