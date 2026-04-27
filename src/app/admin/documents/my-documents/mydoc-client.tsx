@@ -15,6 +15,7 @@ import {
   FolderPlus,
   Loader2,
   ChevronRight,
+  Trash2,
 } from "lucide-react"
 
 // Components
@@ -62,6 +63,8 @@ export default function MyDocClient() {
     const router = useRouter()
     const searchParams = useSearchParams()
     
+    const [selectedIds, setSelectedIds] = useState<Set<string | number>>(new Set())
+    
     // --- STATE INITIALIZATION ---
     // Gunakan nilai default Root agar server & client render awal sama (cegah hydration error)
     const [path, setPath] = useState<PathItem[]>([{ id: 0, name: "Root" }])
@@ -80,6 +83,38 @@ export default function MyDocClient() {
     const [isDialogOpen, setIsDialogOpen] = useState(false)
     const [folderName, setFolderName] = useState("")
     const [isSubmitting, setIsSubmitting] = useState(false)
+
+    const toggleSelection = useCallback((
+        id: string | number, 
+        isMulti: boolean, 
+        isRange?: boolean // Tambahkan '?' agar menjadi opsional
+        ) => {
+        setSelectedIds(prev => {
+            const newSet = new Set(prev);
+            
+            // Jika isRange dipanggil (Shift + Klik), logika di sini
+            if (isRange) {
+                // ... logika range
+                return new Set(newSet);
+            }
+
+            if (isMulti) {
+                if (newSet.has(id)) newSet.delete(id);
+                else newSet.add(id);
+            } else {
+                newSet.clear();
+                newSet.add(id);
+            }
+            return new Set(newSet);
+        });
+    }, []);
+
+    const clearSelection = (e: React.MouseEvent) => {
+        // Cek apakah yang diklik adalah background div, bukan isinya
+        if (e.target === e.currentTarget) {
+            setSelectedIds(new Set())
+        }
+    }
 
     // --- HYDRATION FIX: Sync URL data after mount ---
     useEffect(() => {
@@ -163,6 +198,7 @@ export default function MyDocClient() {
 
     const handleFolderClick = (folder: DocumentItem) => {
         if (folder.is_folder) {
+            setSelectedIds(new Set()) // Clear selection saat masuk folder baru
             const newPath = [...path, { id: folder.id, name: folder.name }]
             setPath(newPath)
             setCurrentFolderId(folder.id)
@@ -173,6 +209,7 @@ export default function MyDocClient() {
     const navigateToPath = (index: number) => {
         const newPath = path.slice(0, index + 1)
         const target = newPath[newPath.length - 1]
+        setSelectedIds(new Set()) // Clear selection saat masuk folder baru
         setPath(newPath)
         setCurrentFolderId(target.id)
         syncUrl(newPath)
@@ -241,6 +278,10 @@ export default function MyDocClient() {
         }
     }
 
+    const handleDeleteBulk = async () => {
+        console.log("Hapus items:", Array.from(selectedIds))
+    }
+
     const openDeleteConfirm = (item: DocumentItem) => {
         setSelectedItem(item)
         setDeleteDialogOpen(true)
@@ -259,6 +300,7 @@ export default function MyDocClient() {
             onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
             onDragLeave={() => setIsDragging(false)}
             onDrop={handleDrop}
+            onClick={clearSelection} // Pasang di sini
         >
             {isDragging && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-blue-500/10 backdrop-blur-sm pointer-events-none">
@@ -279,56 +321,84 @@ export default function MyDocClient() {
             />
 
             <HeaderPage title="My Documents" description="Kelola dan simpan dokumen perusahaan secara aman" />
-            <input type="file" ref={fileInputRef} className="hidden" multiple />
 
-            <div className="flex items-center justify-between gap-4 bg-white p-2 rounded-lg border shadow-sm">
-                <div className="relative flex-1 max-w-md">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                    <Input placeholder="Cari dokumen..." className="pl-9 bg-muted/40 border-none focus-visible:ring-1" />
-                </div>
-                
-                <div className="flex items-center gap-2">
-                    <div className="flex bg-muted rounded-md p-1 mr-2">
+            {selectedIds.size > 0 ? (
+                <div 
+                    className="flex items-center justify-between bg-blue-600 text-white px-4 py-3 rounded-lg shadow-lg animate-in fade-in slide-in-from-top-2"
+                    onClick={(e) => e.stopPropagation()} // Cegah klik di sini menghapus seleksi
+                >
+                    <div className="flex items-center gap-4">
+                        <span className="text-sm font-medium">{selectedIds.size} item terpilih</span>
                         <Button 
-                            variant={viewMode === "grid" ? "outline" : "ghost"} 
-                            size="icon" className={`h-8 w-8 ${viewMode === "grid" ? "bg-white shadow-sm" : ""}`}
-                            onClick={() => setViewMode("grid")}
+                            variant="ghost" 
+                            className="text-white hover:bg-blue-700 h-8"
+                            onClick={() => setSelectedIds(new Set())}
                         >
-                            <Grid2X2 className="w-4 h-4" />
-                        </Button>
-                        <Button 
-                            variant={viewMode === "list" ? "outline" : "ghost"}
-                            size="icon" className={`h-8 w-8 ${viewMode === "list" ? "bg-white shadow-sm" : ""}`}
-                            onClick={() => setViewMode("list")}
-                        >
-                            <List className="w-4 h-4" />
+                            Batal
                         </Button>
                     </div>
-
-                    <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                            <Button variant="secondary" className="gap-2 px-4 py-5 shadow-sm">
-                                <Plus className="w-5 h-5 text-blue-600 stroke-[3px]" /> 
-                                <span className="font-semibold text-sm">New</span>
-                            </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" className="w-56 p-2 rounded-xl shadow-xl border-muted/50">
-                            <DropdownMenuItem onSelect={() => setIsDialogOpen(true)} className="gap-3 py-2.5 cursor-pointer rounded-lg">
-                                <FolderPlus className="w-4 h-4 text-muted-foreground" />
-                                <span>Folder baru</span>
-                            </DropdownMenuItem>
-                            <div className="h-px bg-muted my-1" />
-                            <DropdownMenuItem onClick={() => fileInputRef.current?.click()} className="gap-3 py-2.5 cursor-pointer rounded-lg">
-                                <FilePlus className="w-4 h-4 text-muted-foreground" />
-                                <span>Upload file</span>
-                            </DropdownMenuItem>
-                        </DropdownMenuContent>
-                    </DropdownMenu>
+                    <div className="flex items-center gap-2">
+                        <Button variant="ghost" className="text-white hover:bg-red-500 gap-2 h-9" onClick={handleDeleteBulk}>
+                            <Trash2 className="w-4 h-4" />
+                            Hapus
+                        </Button>
+                        <Button variant="ghost" className="text-white hover:bg-blue-700 gap-2 h-9">
+                            <FolderPlus className="w-4 h-4" />
+                            Pindah
+                        </Button>
+                    </div>
                 </div>
-            </div>
+            ) : (
+                <div className="flex items-center justify-between gap-4 bg-white p-2 rounded-lg border shadow-sm" onClick={(e) => e.stopPropagation()}>
+                    <div className="relative flex-1 max-w-md">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                        <Input placeholder="Cari dokumen..." className="pl-9 bg-muted/40 border-none focus-visible:ring-1" />
+                    </div>
+                    
+                    <div className="flex items-center gap-2">
+                        <div className="flex bg-muted rounded-md p-1 mr-2">
+                            <Button 
+                                variant={viewMode === "grid" ? "outline" : "ghost"} 
+                                size="icon" className={`h-8 w-8 ${viewMode === "grid" ? "bg-white shadow-sm" : ""}`}
+                                onClick={() => setViewMode("grid")}
+                            >
+                                <Grid2X2 className="w-4 h-4" />
+                            </Button>
+                            <Button 
+                                variant={viewMode === "list" ? "outline" : "ghost"}
+                                size="icon" className={`h-8 w-8 ${viewMode === "list" ? "bg-white shadow-sm" : ""}`}
+                                onClick={() => setViewMode("list")}
+                            >
+                                <List className="w-4 h-4" />
+                            </Button>
+                        </div>
+
+                        <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                                <Button variant="secondary" className="gap-2 px-4 py-5 shadow-sm">
+                                    <Plus className="w-5 h-5 text-blue-600 stroke-[3px]" /> 
+                                    <span className="font-semibold text-sm">New</span>
+                                </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="w-56 p-2 rounded-xl shadow-xl border-muted/50">
+                                <DropdownMenuItem onSelect={() => setIsDialogOpen(true)} className="gap-3 py-2.5 cursor-pointer rounded-lg">
+                                    <FolderPlus className="w-4 h-4 text-muted-foreground" />
+                                    <span>Folder baru</span>
+                                </DropdownMenuItem>
+                                <div className="h-px bg-muted my-1" />
+                                <DropdownMenuItem onClick={() => fileInputRef.current?.click()} className="gap-3 py-2.5 cursor-pointer rounded-lg">
+                                    <FilePlus className="w-4 h-4 text-muted-foreground" />
+                                    <span>Upload file</span>
+                                </DropdownMenuItem>
+                            </DropdownMenuContent>
+                        </DropdownMenu>
+                    </div>
+                </div>
+            )}
+
 
             {/* Breadcrumbs */}
-            <div className="flex items-center gap-1 text-sm text-muted-foreground px-1 overflow-x-auto no-scrollbar">
+            <div className="flex items-center gap-1 text-sm text-muted-foreground px-1 overflow-x-auto no-scrollbar" onClick={(e) => e.stopPropagation()}>
                 <span className="select-none whitespace-nowrap">My Drive</span>
                 {path.map((item, index) => (
                     <div key={item.id} className="flex items-center gap-1">
@@ -362,9 +432,25 @@ export default function MyDocClient() {
                         <p>Folder ini kosong</p>
                     </div>
                 ) : viewMode === "grid" ? (
-                    <GridView documents={documents} onFolderClick={handleFolderClick} formatSize={formatSize} onDelete={openDeleteConfirm} />
+                    <GridView 
+                        documents={documents} 
+                        onFolderClick={handleFolderClick} 
+                        formatSize={formatSize} 
+                        onDelete={openDeleteConfirm} 
+                        selectedIds={selectedIds} 
+                        setSelectedIds={setSelectedIds}
+                        onSelect={toggleSelection} 
+                    />
                 ) : (
-                    <ListView documents={documents} onFolderClick={handleFolderClick} formatSize={formatSize} onDelete={openDeleteConfirm} />
+                    <ListView 
+                        documents={documents} 
+                        onFolderClick={handleFolderClick} 
+                        formatSize={formatSize} 
+                        onDelete={openDeleteConfirm} 
+                        selectedIds={selectedIds} 
+                        setSelectedIds={setSelectedIds}
+                        onSelect={toggleSelection} 
+                    />
                 )}
             </div>
 
