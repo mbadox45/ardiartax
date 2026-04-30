@@ -1,0 +1,15 @@
+services:
+  mydoc-client:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        - NEXT_PUBLIC_API_BASE_URL=${NEXT_PUBLIC_API_BASE_URL}
+    container_name: mydoc-client
+    restart: always
+    ports:
+      - "3033:3000"
+    env_file:
+      - .env
+    environment:
+      - NODE_ENV=production
