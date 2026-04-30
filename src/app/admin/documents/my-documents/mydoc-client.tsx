@@ -16,10 +16,13 @@ import {
   Loader2,
   ChevronRight,
   Trash2,
+  X,
+  Share2,
 } from "lucide-react"
 
 // Components
 import { GridView, ListView } from "./document-views"
+import { MoveDialog } from "./move-dialog" // Import modal baru
 import HeaderPage from "@/components/layout/header-page"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -51,12 +54,14 @@ interface DocumentItem {
     file_size: number | string
     file_type: string
     is_folder: boolean
+    is_shared: boolean
     updated_at: string
 }
 
 interface PathItem {
     id: string | number
     name: string
+    is_shared?: boolean // Tambahkan properti ini
 }
 
 export default function MyDocClient() {
@@ -83,6 +88,11 @@ export default function MyDocClient() {
     const [isDialogOpen, setIsDialogOpen] = useState(false)
     const [folderName, setFolderName] = useState("")
     const [isSubmitting, setIsSubmitting] = useState(false)
+
+    const [isMoveDialogOpen, setIsMoveDialogOpen] = useState(false)
+    const [isMoving, setIsMoving] = useState(false)
+
+    const [isSharing, setIsSharing] = useState(false);
 
     const toggleSelection = useCallback((
         id: string | number, 
@@ -146,7 +156,7 @@ export default function MyDocClient() {
             setDocuments(data)
         } catch (error: unknown) {
             const errorMessage = error instanceof Error ? error.message : "Terjadi kesalahan koneksi"
-            toast.error(errorMessage)
+            toast.error(errorMessage, { position: "top-center" })
         } finally {
             setIsLoading(false)
         }
@@ -162,19 +172,21 @@ export default function MyDocClient() {
     const handleUpload = async (files: FileList | null) => {
         if (!files || files.length === 0) return;
 
+        const currentFolderStatus = path[path.length - 1]?.is_shared || false;
+
         // Tampilkan loading toast
         const toastId = toast.loading(`Sedang mengunggah ${files.length} file...`);
         setIsLoading(true); // Opsional: agar muncul spinner di area konten
 
         try {
-            await documentService.uploadFiles(files, currentFolderId);
+            await documentService.uploadFiles(files, currentFolderId, currentFolderStatus);
             
-            toast.success("File berhasil diunggah", { id: toastId });
+            toast.success(`File berhasil diunggah (${currentFolderStatus ? 'Shared' : 'Private'})`, { id: toastId, position: "top-center" });
             // Refresh daftar dokumen
             fetchDocuments(currentFolderId);
         } catch (error: unknown) {
             const msg = error instanceof Error ? error.message : "Gagal upload";
-            toast.error(msg, { id: toastId });
+            toast.error(msg, { id: toastId, position: "top-center" });
         } finally {
             setIsLoading(false);
         }
@@ -199,7 +211,7 @@ export default function MyDocClient() {
     const handleFolderClick = (folder: DocumentItem) => {
         if (folder.is_folder) {
             setSelectedIds(new Set()) // Clear selection saat masuk folder baru
-            const newPath = [...path, { id: folder.id, name: folder.name }]
+            const newPath = [...path, { id: folder.id, name: folder.name, is_shared: folder.is_shared }]
             setPath(newPath)
             setCurrentFolderId(folder.id)
             syncUrl(newPath)
@@ -247,14 +259,16 @@ export default function MyDocClient() {
         e.preventDefault()
         if (!folderName.trim()) return
 
+        const currentFolderStatus = path[path.length - 1]?.is_shared || false;
         setIsSubmitting(true)
         try {
             await documentService.createFolder({
                 name: folderName,
                 parent_id: currentFolderId,
-                is_folder: true
+                is_folder: true,
+                is_shared: currentFolderStatus
             })
-            toast.success(`Folder "${folderName}" berhasil dibuat`)
+            toast.success(`Folder "${folderName}" berhasil dibuat`, { duration: 3000, position: "top-center" })
             setIsDialogOpen(false)
             setFolderName("")
             fetchDocuments(currentFolderId)
@@ -279,13 +293,102 @@ export default function MyDocClient() {
     }
 
     const handleDeleteBulk = async () => {
-        console.log("Hapus items:", Array.from(selectedIds))
+        if (selectedIds.size === 0) return;
+
+        const count = selectedIds.size;
+        const confirmDelete = confirm(`Apakah Anda yakin ingin menghapus ${count} item yang dipilih?`);
+        
+        if (!confirmDelete) return;
+
+        const toastId = toast.loading(`Menghapus ${count} item...`);
+        setIsSubmitting(true);
+
+        try {
+            const idsArray = Array.from(selectedIds);
+            await documentService.bulkDeleteDocuments(idsArray);
+            
+            toast.success(`${count} item berhasil dihapus`, { id: toastId, position: "top-center" });
+            
+            // 1. Bersihkan pilihan
+            setSelectedIds(new Set());
+            
+            // 2. Refresh data
+            fetchDocuments(currentFolderId);
+        } catch (error: unknown) {
+            const errorMessage = error instanceof Error ? error.message : "Terjadi kesalahan saat menghapus";
+            toast.error(errorMessage, { id: toastId, position: "top-center" });
+        } finally {
+            setIsSubmitting(false);
+        }
     }
 
     const openDeleteConfirm = (item: DocumentItem) => {
         setSelectedItem(item)
         setDeleteDialogOpen(true)
     }
+
+    const handleBulkMove = async (targetId: string | number, targetSharedStatus: boolean) => {
+        const idsArray = Array.from(selectedIds)
+        const toastId = toast.loading(`Memindahkan ${idsArray.length} item...`)
+        setIsMoving(true)
+
+        console.log("Memindahkan item:", idsArray, "ke folder:", targetId)
+        try {
+            console.log(targetSharedStatus)
+            await documentService.bulkMoveDocuments(idsArray, targetId)
+            if (targetId !== 0) {
+                // Jika pindah ke folder tertentu, ikuti status folder tersebut (Inherit)
+                await documentService.bulkShareDocuments(idsArray, targetSharedStatus);
+                toast.success(`Berhasil dipindahkan & status disesuaikan dengan folder tujuan`, { id: toastId });
+            } else {
+                // Jika pindah ke Root, biarkan status shared dokumen apa adanya (Keep original)
+                toast.success(`Berhasil dipindahkan ke Root (Status akses tetap)`, { id: toastId });
+            }
+            
+            setIsMoveDialogOpen(false)
+            setSelectedIds(new Set())
+            fetchDocuments(currentFolderId)
+        } catch (error: unknown) {
+            toast.error(error instanceof Error ? error.message : "Gagal memindahkan item", { id: toastId, position: "top-center" })
+        } finally {
+            setIsMoving(false)
+        }
+    }
+
+    const handleBulkShare = async (status: boolean) => {
+        const idsArray = Array.from(selectedIds);
+        const actionText = status ? "Membagikan" : "Membatalkan berbagi";
+        const toastId = toast.loading(`${actionText} ${idsArray.length} item...`);
+        setIsSharing(true);
+
+        try {
+            await documentService.bulkShareDocuments(idsArray, status);
+            toast.success(`Berhasil memperbarui akses ${idsArray.length} item`, { id: toastId, position: "top-center" });
+            
+            // Bersihkan seleksi dan refresh data
+            setSelectedIds(new Set());
+            fetchDocuments(currentFolderId);
+        } catch (error: unknown) {
+            toast.error(error instanceof Error ? error.message : "Gagal memperbarui akses share", { id: toastId, position: "top-center" });
+        } finally {
+            setIsSharing(false);
+        }
+    };
+
+    const handleToggleShareConfirm = async (item: DocumentItem) => {
+        const confirmMessage = `Batalkan akses berbagi untuk "${item.name}"? Semua orang yang memiliki akses tidak akan bisa membukanya lagi.`;
+        
+        if (window.confirm(confirmMessage)) {
+            const toastId = toast.loading("Membatalkan berbagi...");
+            try {
+            await documentService.bulkShareDocuments([item.id], false);
+            toast.success("Akses berbagi dicabut", { id: toastId });
+            fetchDocuments(currentFolderId); // Refresh data
+            } catch (error) {
+            toast.error("Gagal mengubah status", { id: toastId });
+            }
+        }
+    };
 
     // Hindari flicker konten yang salah sebelum mount selesai
     if (!isMounted) return (
@@ -324,27 +427,33 @@ export default function MyDocClient() {
 
             {selectedIds.size > 0 ? (
                 <div 
-                    className="flex items-center justify-between bg-blue-600 text-white px-4 py-3 rounded-lg shadow-lg animate-in fade-in slide-in-from-top-2"
+                    className="flex items-center justify-between bg-gray-500 text-white px-4 py-3 rounded-lg shadow-lg animate-in fade-in slide-in-from-top-2"
                     onClick={(e) => e.stopPropagation()} // Cegah klik di sini menghapus seleksi
                 >
-                    <div className="flex items-center gap-4">
-                        <span className="text-sm font-medium">{selectedIds.size} item terpilih</span>
+                    <div className="flex items-center gap-2">
                         <Button 
                             variant="ghost" 
-                            className="text-white hover:bg-blue-700 h-8"
+                            className="text-white hover:bg-amber-500 h-8 hover:text-white"
+                            size="icon"
                             onClick={() => setSelectedIds(new Set())}
                         >
-                            Batal
+                            <X className="w-4 h-4" />
                         </Button>
+                        <span className="text-sm font-medium">{selectedIds.size} item terpilih</span>
                     </div>
-                    <div className="flex items-center gap-2">
-                        <Button variant="ghost" className="text-white hover:bg-red-500 gap-2 h-9" onClick={handleDeleteBulk}>
+                    <div className="flex items-center md:gap-2 gap-1">
+                        <Button variant="ghost" className="text-white hover:bg-red-500 hover:text-white gap-2 h-9" onClick={handleDeleteBulk}>
                             <Trash2 className="w-4 h-4" />
-                            Hapus
+                            <span className="sm:block hidden">Hapus</span>
                         </Button>
-                        <Button variant="ghost" className="text-white hover:bg-blue-700 gap-2 h-9">
+                        <Button variant="ghost" className="text-white hover:bg-blue-700 hover:text-white gap-2 h-9" onClick={() => setIsMoveDialogOpen(true)}>
                             <FolderPlus className="w-4 h-4" />
-                            Pindah
+                            <span className="sm:block hidden">Pindah</span>
+                        </Button>
+                        <Button variant="ghost" className="text-white hover:bg-cyan-700 hover:text-white gap-2 h-9" onClick={() => handleBulkShare(true)} // Set is_shared: true
+                            disabled={isSharing}>
+                            {isSharing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Share2 className="w-4 h-4" />}
+                            <span className="sm:block hidden">{isSharing ? "Sedang membagikan..." : "Bagikan"}</span>
                         </Button>
                     </div>
                 </div>
@@ -440,6 +549,7 @@ export default function MyDocClient() {
                         selectedIds={selectedIds} 
                         setSelectedIds={setSelectedIds}
                         onSelect={toggleSelection} 
+                        onToggleShare={handleToggleShareConfirm}
                     />
                 ) : (
                     <ListView 
@@ -450,6 +560,7 @@ export default function MyDocClient() {
                         selectedIds={selectedIds} 
                         setSelectedIds={setSelectedIds}
                         onSelect={toggleSelection} 
+                        onToggleShare={handleToggleShareConfirm}
                     />
                 )}
             </div>
@@ -478,6 +589,14 @@ export default function MyDocClient() {
                     </form>
                 </DialogContent>
             </Dialog>
+
+            <MoveDialog 
+                isOpen={isMoveDialogOpen}
+                onOpenChange={setIsMoveDialogOpen}
+                selectedCount={selectedIds.size}
+                onConfirm={(id, shared) => handleBulkMove(id, shared)}
+                isSubmitting={isMoving}
+            />
         </div>
     )
 }

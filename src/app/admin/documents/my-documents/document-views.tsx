@@ -2,7 +2,8 @@
 import { 
   FolderIcon, FileText, MoreVertical, Trash2,
   FileImage, FileJson, FileCode, Music, Video, 
-  FileSpreadsheet, FileArchive 
+  FileSpreadsheet, FileArchive, 
+  Share2
 } from "lucide-react"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Button } from "@/components/ui/button"
@@ -15,6 +16,7 @@ interface DocumentItem {
   file_size: number | string
   file_type: string
   is_folder: boolean
+  is_shared: boolean
   updated_at: string
 }
 
@@ -26,6 +28,7 @@ interface ViewProps {
   selectedIds: Set<string | number>
   setSelectedIds: React.Dispatch<React.SetStateAction<Set<string | number>>>
   onSelect: (id: string | number, isMulti: boolean) => void
+  onToggleShare: (item: DocumentItem) => void // Properti baru
 }
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1"
@@ -69,7 +72,7 @@ const handleViewFile = async (id: string | number , setSelectedIds: React.Dispat
 }
 
 // --- GRID VIEW COMPONENT ---
-export function GridView({ documents, onFolderClick, formatSize, onDelete, selectedIds, onSelect }: ViewProps) {
+export function GridView({ documents, onFolderClick, formatSize, onDelete, selectedIds, onSelect, onToggleShare }: ViewProps) {
   return (
     <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4" onClick={(e) => e.stopPropagation()}>
       {documents.map((item) => {
@@ -97,7 +100,15 @@ export function GridView({ documents, onFolderClick, formatSize, onDelete, selec
             )}
             <div className="flex justify-between items-start mb-4">
               <Icon className={`w-10 h-10 ${color}`} />
-              <div onClick={(e) => e.stopPropagation()}>
+              {item.is_shared && (
+                <div className="absolute top-2 right-2 bg-blue-100 p-1 rounded-full shadow-sm z-10" onClick={(e) => {
+                  e.stopPropagation(); // Cegah Grid terpilih
+                  onToggleShare(item);
+                }}>
+                  <Share2 className="w-3 h-3 text-blue-600" />
+                </div>
+              )}
+              {/* <div onClick={(e) => e.stopPropagation()}>
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <Button variant="ghost" size="icon" className="h-8 w-8">
@@ -110,7 +121,7 @@ export function GridView({ documents, onFolderClick, formatSize, onDelete, selec
                     </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
-              </div>
+              </div> */}
             </div>
             <span className="text-sm font-medium truncate mb-1">{item.name}</span>
             <span className="text-[10px] text-muted-foreground">
@@ -124,7 +135,7 @@ export function GridView({ documents, onFolderClick, formatSize, onDelete, selec
 }
 
 // --- LIST VIEW COMPONENT ---
-export function ListView({ documents, onFolderClick, formatSize, onDelete, selectedIds, onSelect }: ViewProps) {
+export function ListView({ documents, onFolderClick, formatSize, onDelete, selectedIds, onSelect, onToggleShare }: ViewProps) {
   return (
     <div className="bg-white border rounded-xl overflow-hidden shadow-sm" onClick={(e) => e.stopPropagation()}>
       <table className="w-full text-sm">
@@ -172,18 +183,14 @@ export function ListView({ documents, onFolderClick, formatSize, onDelete, selec
                   {item.is_folder ? "--" : formatSize(item.file_size)}
                 </td>
                 <td className="p-3" onClick={(e) => e.stopPropagation()}>
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" size="icon" className="h-8 w-8">
-                        <MoreVertical className="w-4 h-4 text-muted-foreground" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                      <DropdownMenuItem onClick={() => onDelete(item)} className="text-destructive">
-                        <Trash2 className="w-4 h-4 mr-2" /> Hapus
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
+                  {item.is_shared && (
+                    <div className="bg-blue-100 p-1 rounded-full shadow-sm z-10" onClick={(e) => {
+                      e.stopPropagation();
+                      onToggleShare(item);
+                    }}>
+                      <Share2 className="w-3 h-3 text-blue-600" />
+                    </div>
+                  )}
                 </td>
               </tr>
             )

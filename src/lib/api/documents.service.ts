@@ -44,7 +44,7 @@ class DocumentService {
     }
   }
 
-  async uploadFiles(files: FileList | File[], parentId: string | number) {
+  async uploadFiles(files: FileList | File[], parentId: string | number, isShared: boolean) {
     const formData = new FormData();
     
     // Masukkan semua file ke formData
@@ -54,7 +54,7 @@ class DocumentService {
 
     // Masukkan metadata tambahan
     formData.append("parent_id", String(parentId));
-    formData.append("is_shared", "false");
+    formData.append("is_shared", String(isShared));
 
     try {
       const response = await fetch(`${this.baseUrl}/documents/upload`, {
@@ -88,7 +88,6 @@ class DocumentService {
         method: "POST",
         headers: this.headers,
         body: JSON.stringify({
-          is_shared: false,
           ...payload
         }),
       });
@@ -154,6 +153,66 @@ class DocumentService {
         return await response.json();
     } catch (error) {
         console.error("DocumentService.deleteDocument Error:", error);
+        throw error;
+    }
+  }
+
+  async bulkDeleteDocuments(documentIds: (string | number)[]) {
+    try {
+        const response = await fetch(`${this.baseUrl}/documents/bulk-delete`, {
+            method: "POST",
+            headers: this.headers,
+            body: JSON.stringify({ document_ids: documentIds }),
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            throw new Error(errorData.message || "Gagal menghapus dokumen");
+        }
+
+        return await response.json();
+    } catch (error) {
+        console.error("DocumentService.bulkDeleteDocuments Error:", error);
+        throw error;
+    }
+  }
+
+  async bulkMoveDocuments(ids: (string | number)[], targetId: string | number) {
+    try {
+        const response = await fetch(`${this.baseUrl}/documents/bulk-move`, {
+            method: "POST",
+            headers: this.headers,
+            body: JSON.stringify({ document_ids: ids, target_folder_id: targetId }),
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            throw new Error(errorData.message || "Gagal memindahkan dokumen");
+        }
+
+        return await response.json();
+    } catch (error) {
+        console.error("DocumentService.bulkMoveDocuments Error:", error);
+        throw error;
+    }
+  }
+
+  async bulkShareDocuments(ids: (string | number)[], isShared: boolean) {
+    try {
+        const response = await fetch(`${this.baseUrl}/documents/share`, {
+            method: "POST",
+            headers: this.headers,
+            body: JSON.stringify({ document_ids: ids, is_shared: isShared }),
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            throw new Error(errorData.message || "Gagal membagikan dokumen");
+        }
+
+        return await response.json();
+    } catch (error) {
+        console.error("DocumentService.bulkShareDocuments Error:", error);
         throw error;
     }
   }
