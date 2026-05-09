@@ -1,4 +1,4 @@
-// src/app/admin/documents/my-documents/_components/document-views.tsx
+// src/app/admin/documents/my-documents/document-views.tsx
 import { 
   FolderIcon, FileText, MoreVertical, Trash2,
   FileImage, FileJson, FileCode, Music, Video, 
