@@ -216,7 +216,25 @@ class DocumentService {
         throw error;
     }
   }
+
+  async downloadFile(documentId: string | number) {
+    const response = await fetch(`${this.baseUrl}/documents/${documentId}/download`, {
+        method: "GET",
+        headers: this.headers,
+    });
+  
+    const blob = await response.blob();
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = item.name;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  }
+
 }
+
 
 // Export sebagai singleton instance
 export const documentService = new DocumentService();

@@ -3,7 +3,7 @@ import {
   FolderIcon, FileText, MoreVertical, Trash2,
   FileImage, FileJson, FileCode, Music, Video, 
   FileSpreadsheet, FileArchive, 
-  Share2
+  Share2, Pencil, Download
 } from "lucide-react"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Button } from "@/components/ui/button"
@@ -25,10 +25,11 @@ interface ViewProps {
   onFolderClick: (folder: DocumentItem) => void
   formatSize: (size: number | string) => string
   onDelete: (item: DocumentItem) => void
+  onRename: (item: DocumentItem) => void // Properti baru
+  onDownload: (item: DocumentItem) => void // Properti baru
   selectedIds: Set<string | number>
-  setSelectedIds: React.Dispatch<React.SetStateAction<Set<string | number>>>
   onSelect: (id: string | number, isMulti: boolean) => void
-  onToggleShare: (item: DocumentItem) => void // Properti baru
+  onToggleShare: (item: DocumentItem) => void
 }
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1"
@@ -70,6 +71,43 @@ const handleViewFile = async (id: string | number , setSelectedIds: React.Dispat
     toast.error("Tidak dapat melihat file", { id: toastId })
   }
 }
+
+const ActionMenu = ({ 
+  item, onDelete, onRename, onDownload 
+}: { 
+  item: DocumentItem, 
+  onDelete: (i: DocumentItem) => void, 
+  onRename: (i: DocumentItem) => void,
+  onDownload: (i: DocumentItem) => void 
+}) => (
+  <div onClick={(e) => e.stopPropagation()}>
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button variant="ghost" size="icon" className="h-8 w-8 hover:bg-black/5">
+          <MoreVertical className="w-4 h-4 text-muted-foreground" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-40">
+        <DropdownMenuItem onClick={() => onRename(item)}>
+          <Pencil className="w-4 h-4 mr-2" /> Rename
+        </DropdownMenuItem>
+        
+        {!item.is_folder && (
+          <DropdownMenuItem onClick={() => onDownload(item)}>
+            <Download className="w-4 h-4 mr-2" /> Download
+          </DropdownMenuItem>
+        )}
+
+        <DropdownMenuItem 
+          onClick={() => onDelete(item)} 
+          className="text-red-600 focus:text-red-600 focus:bg-red-50"
+        >
+          <Trash2 className="w-4 h-4 mr-2" /> Delete
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  </div>
+)
 
 // --- GRID VIEW COMPONENT ---
 export function GridView({ documents, onFolderClick, formatSize, onDelete, selectedIds, onSelect, onToggleShare }: ViewProps) {
