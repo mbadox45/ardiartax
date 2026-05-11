@@ -44,7 +44,7 @@ import { Label } from "@/components/ui/label"
 import { toast } from "sonner"
 
 // Service
-import { documentService } from "@/lib/api/documents.service"
+import { documentService, } from "@/lib/api/documents.service"
 import { DeleteConfirmDialog } from "./delete-confirm-dialog"
 import { encryptData, decryptData } from "@/lib/crypto"
 
@@ -89,10 +89,34 @@ export default function MyDocClient() {
     const [folderName, setFolderName] = useState("")
     const [isSubmitting, setIsSubmitting] = useState(false)
 
+    const [dialogMode, setDialogMode] = useState<"create" | "rename">("create");
+    const [selectedItemToRename, setSelectedItemToRename] = useState<DocumentItem | null>(null);
+
     const [isMoveDialogOpen, setIsMoveDialogOpen] = useState(false)
     const [isMoving, setIsMoving] = useState(false)
 
     const [isSharing, setIsSharing] = useState(false);
+
+    // Data Dummy (Nanti bisa diisi dari fetch API)
+    const storageInfo = {
+        used: 450000000, // 450 MB dalam bytes
+        limit: 200000000000, // 200 GB dalam bytes
+        percentage: (450000000 / 200000000000) * 100 // Hitung persentase
+    };
+
+    const handleRenameTrigger = (item: DocumentItem) => {
+        setDialogMode("rename");
+        setSelectedItemToRename(item);
+        setFolderName(item.name); // Isi input dengan nama lama
+        setIsDialogOpen(true);
+    };
+
+    const handleCreateTrigger = () => {
+        setDialogMode("create");
+        setSelectedItemToRename(null);
+        setFolderName("");
+        setIsDialogOpen(true);
+};
 
     const toggleSelection = useCallback((
         id: string | number, 
@@ -250,45 +274,57 @@ export default function MyDocClient() {
         if (typeof size === "string") return size
         if (size === 0) return "0 Bytes"
         const k = 1024
-        const sizes = ["Bytes", "KB", "MB", "GB"]
+        const sizes = ["Bytes", "KB", "MB", "GB", 'TB', 'PB', 'EB', 'ZB', 'YB']
         const i = Math.floor(Math.log(Number(size)) / Math.log(k))
         return parseFloat((Number(size) / Math.pow(k, i)).toFixed(2)) + " " + sizes[i]
     }
 
-    const handleCreateFolder = async (e: React.FormEvent) => {
-        e.preventDefault()
-        if (!folderName.trim()) return
+    const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!folderName.trim()) return;
 
-        const currentFolderStatus = path[path.length - 1]?.is_shared || false;
-        setIsSubmitting(true)
+        setIsSubmitting(true);
         try {
-            await documentService.createFolder({
-                name: folderName,
-                parent_id: currentFolderId,
-                is_folder: true,
-                is_shared: currentFolderStatus
-            })
-            toast.success(`Folder "${folderName}" berhasil dibuat`, { duration: 3000, position: "top-center" })
-            setIsDialogOpen(false)
-            setFolderName("")
-            fetchDocuments(currentFolderId)
+            if (dialogMode === "create") {
+                // Logika Create Folder yang sudah Anda miliki
+                const currentFolderStatus = path[path.length - 1]?.is_shared || false;
+                await documentService.createFolder({
+                    name: folderName,
+                    parent_id: currentFolderId,
+                    is_folder: true,
+                    is_shared: currentFolderStatus
+                })
+                toast.success("Folder berhasil dibuat", { position: "top-center" });
+            } else {
+                // Logika Rename
+                if (!selectedItemToRename) return;
+                const response = await documentService.renameDocument(selectedItemToRename.id, folderName.trim());
+                console.log("Rename response:", response);
+                if (!response.status) throw new Error("Gagal mengubah nama");
+
+                toast.success("Nama berhasil diubah", { position: "top-center" });
+            }
+
+            setIsDialogOpen(false);
+            setFolderName("");
+            fetchDocuments(currentFolderId);
         } catch (error: unknown) {
-            const errorMessage = error instanceof Error ? error.message : "Gagal menyimpan folder"
-            toast.error(errorMessage)
+            const errorMessage = error instanceof Error ? error.message : "Terjadi kesalahan";
+            toast.error(errorMessage, { position: "top-center" });
         } finally {
-            setIsSubmitting(false)
+            setIsSubmitting(false);
         }
-    }
+    };
 
     const handleDelete = async () => {
         if (!selectedItem) return
         try {
             await documentService.deleteDocument(selectedItem.id)
-            toast.success(`${selectedItem.name} berhasil dihapus`)
+            toast.success(`${selectedItem.name} berhasil dihapus`, { position: "top-center" });
             fetchDocuments(currentFolderId)
         } catch (error: unknown) {
             const msg = error instanceof Error ? error.message : "Gagal menghapus"
-            toast.error(msg)
+            toast.error(msg, { position: "top-center" });
         }
     }
 
@@ -390,6 +426,39 @@ export default function MyDocClient() {
         }
     };
 
+    const handleDownload = async (item: DocumentItem) => {
+        // Folder tidak bisa didownload secara langsung sebagai file tunggal (biasanya harus ZIP)
+        const toastId = toast.loading(`Menyiapkan unduhan: ${item.name}...`);
+        try {
+            let response;
+            if (item.is_folder) {
+                response = await documentService.downloadDocumentToZip(item.id);
+            } else {
+                response = await documentService.downloadDocument(item.id);
+            }
+
+            if (!response.ok) throw new Error("Gagal mengunduh file");
+
+            const blob = await response.blob();
+            const url = window.URL.createObjectURL(blob);
+            
+            // Membuat elemen link sementara
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = item.name; // Memberikan nama file asli
+            document.body.appendChild(a);
+            a.click();
+            
+            // Bersihkan kembali
+            document.body.removeChild(a);
+            window.URL.revokeObjectURL(url);
+            
+            toast.success("Unduhan dimulai", { id: toastId });
+        } catch (error) {
+            toast.error("Gagal mengunduh file", { id: toastId });
+        }
+    };
+
     // Hindari flicker konten yang salah sebelum mount selesai
     if (!isMounted) return (
         <div className="flex items-center justify-center min-h-screen">
@@ -459,9 +528,25 @@ export default function MyDocClient() {
                 </div>
             ) : (
                 <div className="flex items-center justify-between gap-4 bg-white p-2 rounded-lg border shadow-sm" onClick={(e) => e.stopPropagation()}>
-                    <div className="relative flex-1 max-w-md">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                        <Input placeholder="Cari dokumen..." className="pl-9 bg-muted/40 border-none focus-visible:ring-1" />
+                    {/* BAGIAN KAPASITAS (MENGGANTIKAN SEARCH) */}
+                    <div className="flex flex-col flex-1 max-w-xs gap-1.5 ml-2">
+                        <div className="flex justify-between items-end text-[11px]">
+                            <span className="font-medium text-muted-foreground">
+                                Penyimpanan: <span className="text-foreground font-bold">{formatSize(storageInfo.used)}</span>
+                            </span>
+                            <span className="text-muted-foreground">
+                                dari {formatSize(storageInfo.limit)}
+                            </span>
+                        </div>
+                        {/* Progress Bar Kustom */}
+                        <div className="h-2 w-full bg-muted rounded-full overflow-hidden border border-muted-foreground/10">
+                            <div 
+                                className={`h-full transition-all duration-500 ${
+                                    storageInfo.percentage > 90 ? 'bg-red-500' : 'bg-blue-600'
+                                }`}
+                                style={{ width: `${storageInfo.percentage}%` }}
+                            />
+                        </div>
                     </div>
                     
                     <div className="flex items-center gap-2">
@@ -490,7 +575,7 @@ export default function MyDocClient() {
                                 </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end" className="w-56 p-2 rounded-xl shadow-xl border-muted/50">
-                                <DropdownMenuItem onSelect={() => setIsDialogOpen(true)} className="gap-3 py-2.5 cursor-pointer rounded-lg">
+                                <DropdownMenuItem onSelect={() => handleCreateTrigger()} className="gap-3 py-2.5 cursor-pointer rounded-lg">
                                     <FolderPlus className="w-4 h-4 text-muted-foreground" />
                                     <span>Folder baru</span>
                                 </DropdownMenuItem>
@@ -546,6 +631,8 @@ export default function MyDocClient() {
                         onFolderClick={handleFolderClick} 
                         formatSize={formatSize} 
                         onDelete={openDeleteConfirm} 
+                        onRename={handleRenameTrigger}
+                        onDownload={handleDownload}
                         selectedIds={selectedIds} 
                         setSelectedIds={setSelectedIds}
                         onSelect={toggleSelection} 
@@ -557,6 +644,8 @@ export default function MyDocClient() {
                         onFolderClick={handleFolderClick} 
                         formatSize={formatSize} 
                         onDelete={openDeleteConfirm} 
+                        onRename={handleRenameTrigger}
+                        onDownload={handleDownload}
                         selectedIds={selectedIds} 
                         setSelectedIds={setSelectedIds}
                         onSelect={toggleSelection} 
@@ -569,21 +658,42 @@ export default function MyDocClient() {
 
             <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
                 <DialogContent className="sm:max-w-[425px]">
-                    <form onSubmit={handleCreateFolder}>
+                    <form onSubmit={handleSubmit}>
                         <DialogHeader>
-                            <DialogTitle>Folder Baru</DialogTitle>
-                            <DialogDescription>Masukkan nama untuk folder baru Anda.</DialogDescription>
+                            <DialogTitle>
+                                {dialogMode === "create" ? "Folder Baru" : "Ubah Nama"}
+                            </DialogTitle>
+                            <DialogDescription>
+                                {dialogMode === "create" 
+                                    ? "Masukkan nama untuk folder baru Anda." 
+                                    : `Masukkan nama baru untuk ${selectedItemToRename?.is_folder ? 'folder' : 'file'} ini.`}
+                            </DialogDescription>
                         </DialogHeader>
                         <div className="grid gap-4 py-4">
                             <div className="grid gap-2">
-                                <Label htmlFor="name">Nama Folder</Label>
-                                <Input id="name" value={folderName} onChange={(e) => setFolderName(e.target.value)} placeholder="Untitled Folder" autoFocus required />
+                                <Label htmlFor="name">Nama</Label>
+                                <Input 
+                                    id="name" 
+                                    value={folderName} 
+                                    onChange={(e) => setFolderName(e.target.value)} 
+                                    placeholder={dialogMode === "create" ? "Untitled Folder" : "Masukkan nama baru"} 
+                                    autoFocus 
+                                    required 
+                                />
                             </div>
                         </div>
                         <DialogFooter>
                             <Button type="button" variant="ghost" onClick={() => setIsDialogOpen(false)} disabled={isSubmitting}>Batal</Button>
-                            <Button type="submit" disabled={isSubmitting || !folderName.trim()} className="bg-blue-600 hover:bg-blue-700 text-white">
-                                {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : "Simpan"}
+                            <Button 
+                                type="submit" 
+                                disabled={isSubmitting || !folderName.trim() || (dialogMode === "rename" && folderName === selectedItemToRename?.name)} 
+                                className="bg-blue-600 hover:bg-blue-700 text-white"
+                            >
+                                {isSubmitting ? (
+                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                ) : (
+                                    dialogMode === "create" ? "Simpan" : "Perbarui"
+                                )}
                             </Button>
                         </DialogFooter>
                     </form>

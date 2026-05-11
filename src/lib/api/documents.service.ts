@@ -217,20 +217,53 @@ class DocumentService {
     }
   }
 
-  async downloadFile(documentId: string | number) {
-    const response = await fetch(`${this.baseUrl}/documents/${documentId}/download`, {
-        method: "GET",
-        headers: this.headers,
-    });
+  async downloadDocument(documentId: string | number) {
+    try {
+        const token = Cookies.get("access_token");
+        const response = await fetch(`${this.baseUrl}/documents/${documentId}/download`, {
+            method: "GET",
+            headers: {
+                "Authorization": `Bearer ${token}`,
+            },
+        });
+
+        return response;
+    } catch (error) {
+        console.error("DocumentService.downloadDocument Error:", error);
+        throw error;
+    }
+  }
+
+  async downloadDocumentToZip(documentId: string | number) {
+    try {
+        const token = Cookies.get("access_token");
+        const response = await fetch(`${this.baseUrl}/documents/${documentId}/download-folder`, {
+            method: "GET",
+            headers: {
+                "Authorization": `Bearer ${token}`,
+            },
+        });
+
+        return response;
+    } catch (error) {
+        console.error("DocumentService.downloadDocumentToZip Error:", error);
+        throw error;
+    }
+  }
   
-    const blob = await response.blob();
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = item.name;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
+  async renameDocument(documentId: string | number, newName: string) {
+    try {
+        const response = await fetch(`${this.baseUrl}/documents/${documentId}/rename`, {
+            method: "PUT",
+            headers: this.headers,
+            body: JSON.stringify({ name: newName }),
+        });
+
+        return await response.json();
+    } catch (error) {
+        console.error("DocumentService.renameDocument Error:", error);
+        throw error;
+    }
   }
 
 }
