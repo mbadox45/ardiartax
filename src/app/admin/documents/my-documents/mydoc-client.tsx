@@ -44,7 +44,8 @@ import { Label } from "@/components/ui/label"
 import { toast } from "sonner"
 
 // Service
-import { documentService, } from "@/lib/api/documents.service"
+import { documentService } from "@/lib/api/documents.service"
+import { storageService } from "@/lib/api/storage.service"
 import { DeleteConfirmDialog } from "./delete-confirm-dialog"
 import { encryptData, decryptData } from "@/lib/crypto"
 
@@ -97,14 +98,9 @@ export default function MyDocClient() {
 
     const [isSharing, setIsSharing] = useState(false);
 
-    // Data Dummy (Nanti bisa diisi dari fetch API)
-    const storageInfo = {
-        used: 450000000, // 450 MB dalam bytes
-        limit: 200000000000, // 200 GB dalam bytes
-        percentage: (450000000 / 200000000000) * 100 // Hitung persentase
-    };
+    const [storageInfo, setStorageInfo] = useState({used: 0, limit: 0, percentage: 0});
 
-    const handleRenameTrigger = (item: DocumentItem) => {
+        const handleRenameTrigger = (item: DocumentItem) => {
         setDialogMode("rename");
         setSelectedItemToRename(item);
         setFolderName(item.name); // Isi input dengan nama lama
@@ -278,6 +274,30 @@ export default function MyDocClient() {
         const i = Math.floor(Math.log(Number(size)) / Math.log(k))
         return parseFloat((Number(size) / Math.pow(k, i)).toFixed(2)) + " " + sizes[i]
     }
+
+    const fetchStorageInfo = async () => {
+        try {
+            const response = await storageService.getStorageInfo();
+
+            if (!response.status) throw new Error("Gagal mengambil data storage");
+
+            const data = await response.json();
+            
+            // Asumsi API mengembalikan { used: number, limit: number, percentage: number }
+            setStorageInfo({
+                used: data.used_storage_mb,
+                limit: data.max_storage_mb,
+                percentage: data.percentage
+            });
+        } catch (error) {
+            console.error("Error fetching storage:", error);
+        }
+    };
+
+    // Panggil saat component mount
+    useEffect(() => {
+        fetchStorageInfo();
+    }, []);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -529,7 +549,7 @@ export default function MyDocClient() {
             ) : (
                 <div className="flex items-center justify-between gap-4 bg-white p-2 rounded-lg border shadow-sm" onClick={(e) => e.stopPropagation()}>
                     {/* BAGIAN KAPASITAS (MENGGANTIKAN SEARCH) */}
-                    <div className="flex flex-col flex-1 max-w-xs gap-1.5 ml-2">
+                    <div className="flex flex-col flex-1 w-full gap-1.5 ml-2">
                         <div className="flex justify-between items-end text-[11px]">
                             <span className="font-medium text-muted-foreground">
                                 Penyimpanan: <span className="text-foreground font-bold">{formatSize(storageInfo.used)}</span>

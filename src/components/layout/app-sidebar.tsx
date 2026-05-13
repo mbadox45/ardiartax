@@ -20,6 +20,8 @@ import {
   Search,
   Settings,
   Users,
+  Network,
+  HardDrive,
   Ship,
   Clipboard
 } from "lucide-react";
@@ -92,9 +94,21 @@ const data = {
       ],
     },
     {
-      title: "Team",
-      url: "/admin/teams",
-      icon: Users,
+      title: "Management System",
+      url: "#",
+      icon: Network,
+      items: [
+        {
+          title: "User Management",
+          icon: Users,
+          url: "/admin/documents/user-management",
+        },
+        {
+          title: "Store Management",
+          icon: HardDrive,
+          url: "/admin/documents/store-management",
+        },
+      ],
     },
   ],
   navClouds: [
