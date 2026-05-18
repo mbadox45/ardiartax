@@ -1,10 +1,10 @@
 import type { Metadata } from "next"
-import UserClient from "./users-client"
+import UsersClient from "./UsersClient"
 
 export const metadata: Metadata = {
   title: "User Management",
 }
 
 export default function Page() {
-  return <UserClient />
+  return <UsersClient />
 }

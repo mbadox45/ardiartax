@@ -10,9 +10,9 @@ import { Edit2, Trash2, CheckCircle2, XCircle } from "lucide-react"
 export type UserData = {
   id: string
   name: string
-  email: string
+  username: string
   role: "super_admin" | "admin" | "user"
-  status: "active" | "inactive"
+  status: true | false
 }
 
 // Komponen Khusus untuk Kolom Aksi (Edit & Delete)
@@ -82,9 +82,9 @@ export const columns: ColumnDef<UserData>[] = [
     cell: ({ row }) => <div className="font-medium text-gray-900">{row.getValue("name")}</div>,
   },
   {
-    accessorKey: "email",
+    accessorKey: "username",
     header: "Email",
-    cell: ({ row }) => <div className="text-muted-foreground font-mono text-xs">{row.getValue("email")}</div>,
+    cell: ({ row }) => <div className="text-muted-foreground font-mono text-xs">{row.getValue("username")}</div>,
   },
   {
     accessorKey: "role",
@@ -99,32 +99,6 @@ export const columns: ColumnDef<UserData>[] = [
         return <Badge className="bg-blue-700 text-white shadow-none border-none text-xs font-medium">Admin</Badge>
       }
       return <Badge variant="secondary" className="shadow-none border-none text-xs font-medium">User</Badge>
-    },
-  },
-  {
-    accessorKey: "status",
-    header: "Status",
-    cell: ({ row }) => {
-      const status = row.getValue("status") as UserData["status"]
-      
-      return (
-        <Badge 
-          variant={status === "active" ? "default" : "secondary"}
-          className={`gap-1 text-white text-xs shadow-none border-none ${
-            status === "active" ? "bg-green-700" : "bg-gray-500"
-          }`}
-        >
-          {status === "active" ? (
-            <>
-              <CheckCircle2 className="size-3" /> Aktif
-            </>
-          ) : (
-            <>
-              <XCircle className="size-3" /> Nonaktif
-            </>
-          )}
-        </Badge>
-      )
     },
   },
   {

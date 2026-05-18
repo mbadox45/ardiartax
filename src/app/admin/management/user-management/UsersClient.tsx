@@ -1,32 +1,23 @@
 // src/app/admin/management/user-management/users-client.tsx
 "use client"
 
-import { useState, useEffect } from "react"
+// 1. Pastikan useCallback di-import
+import { useState, useEffect, useCallback } from "react"
 import { v4 as uuidv4 } from "uuid"
-import { Plus, Search, Edit2, Trash2, UserCheck, UserX } from "lucide-react"
+import { Plus, Search } from "lucide-react"
 import { toast } from "sonner"
 
 // Components
 import HeaderPage from "@/components/layout/header-page"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
 import { UniversalDataTable } from "@/components/layout/universal-data-table"
 import { columns, UserData } from "./columns"
-import { UserFormDialog, UserItem } from "./user-form-dialog"
-
+import { UserFormDialog } from "./user-form-dialog"
 import { userService } from "@/lib/api/user.service"
 
-
-// Data Dummy Awal
-const INITIAL_USERS: UserData[] = [
-  { id: "1", name: "Ardi Artax", email: "admin@ardiartax.com", role: "super_admin", status: "active" },
-  { id: "2", name: "Jane Smith", email: "janesmith@mail.com", role: "admin", status: "active" },
-  { id: "3", name: "Rian Ferdinand", email: "rian@mail.com", role: "user", status: "inactive" },
-]
-
-export default function UserClient() {
-  const [users, setUsers] = useState<UserData[]>(INITIAL_USERS)
+export default function UsersClient() {
+  const [users, setUsers] = useState<UserData[]>([])
   const [searchQuery, setSearchQuery] = useState("")
   
   // State Dialog Control
@@ -34,26 +25,49 @@ export default function UserClient() {
   const [dialogMode, setDialogMode] = useState<"create" | "update">("create")
   const [selectedUser, setSelectedUser] = useState<UserData | null>(null)
 
+  // Fetch Data dari API Service
   const fetchUsers = useCallback(async () => {
-  try {
-    const data = await userService.getAll()
-    setUsers(data)
-  } catch (error) {
-    toast.error("Gagal memuat data pengguna")
-  }
-}, []) // Array kosong jika tidak ada dependensi state eksternal
+    try {
+      const data = await userService.getAll()
+      setUsers(data)
+    } catch (error) {
+      toast.error("Gagal memuat data pengguna")
+    }
+  }, [])
 
-// 2. Panggil di dalam useEffect dengan mendaftarkannya sebagai dependensi
-useEffect(() => {
-  fetchUsers()
-}, [fetchUsers])
+  // Jalankan fetch saat mount
+  useEffect(() => {
+    fetchUsers()
+  }, [fetchUsers])
+
+  // 2. PERBAIKAN UTAMA: Pasang kembali Event Listener dari columns.tsx
+  useEffect(() => {
+    const handleEditEvent = (e: Event) => {
+      const user = (e as CustomEvent).detail
+      handleUpdateTrigger(user)
+    }
+
+    const handleDeleteEvent = (e: Event) => {
+      const user = (e as CustomEvent).detail
+      handleDeleteUser(user.id, user.name)
+    }
+
+    window.addEventListener("user-action-edit", handleEditEvent)
+    window.addEventListener("user-action-delete", handleDeleteEvent)
+
+    return () => {
+      window.removeEventListener("user-action-edit", handleEditEvent)
+      window.removeEventListener("user-action-delete", handleDeleteEvent)
+    }
+  }, [])
 
   // Filter User berdasarkan pencarian Nama / Email
   const filteredUsers = users.filter(user => 
-    user.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    user.email.toLowerCase().includes(searchQuery.toLowerCase())
+    user.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    user.username?.toLowerCase().includes(searchQuery.toLowerCase())
   )
 
+  // Triggers
   const handleCreateTrigger = () => {
     setDialogMode("create")
     setSelectedUser(null)
@@ -66,43 +80,32 @@ useEffect(() => {
     setIsDialogOpen(true)
   }
 
-  const handleDeleteTrigger = (user: UserData) => {
-    setSelectedUser(user)
-    
-  }
-
+  // Actions
   const handleFormSubmit = async (data: Omit<UserData, "id"> & { id?: string }) => {
-    // Simulasi delay hit API
+    // TODO: Ganti dengan service riil jika endpoint POST/PUT sudah siap
     await new Promise((resolve) => setTimeout(resolve, 800))
 
     if (dialogMode === "create") {
-      const newUser: UserItem = {
+      const newUser: UserData = {
         id: uuidv4(),
         name: data.name,
-        email: data.email,
+        username: data.username,
         role: data.role,
         status: data.status
       }
       setUsers([newUser, ...users])
       toast.success("User berhasil ditambahkan")
     } else {
-      setUsers(users.map(u => u.id === data.id ? { ...u, ...data } as UserItem : u))
+      setUsers(users.map(u => u.id === data.id ? { ...u, ...data } as UserData : u))
       toast.success("Data user berhasil diperbarui")
     }
   }
 
   const handleDeleteUser = (id: string, name: string) => {
     if (confirm(`Apakah Anda yakin ingin menghapus user ${name}?`)) {
+      // TODO: Ganti dengan userService.delete(id) jika sudah siap
       setUsers(users.filter(u => u.id !== id))
       toast.success("User berhasil dihapus")
-    }
-  }
-
-  const getRoleBadge = (role: UserItem["role"]) => {
-    switch (role) {
-      case "super_admin": return <Badge className="bg-red-100 text-red-700 hover:bg-red-100 shadow-none border-none">Super Admin</Badge>
-      case "admin": return <Badge className="bg-blue-100 text-blue-700 hover:bg-blue-100 shadow-none border-none">Admin</Badge>
-      default: return <Badge variant="secondary" className="shadow-none border-none">User</Badge>
     }
   }
 
@@ -111,7 +114,7 @@ useEffect(() => {
       {/* Header */}
       <HeaderPage title="User Management" description="Kelola pengguna dan akses mereka" />
 
-      {/* Toolbar (Search & Add Button) */}
+      {/* Toolbar */}
       <div className="flex items-center justify-between gap-4 bg-white p-3 rounded-lg border shadow-sm">
         <div className="relative flex-1 max-w-sm">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
@@ -131,15 +134,14 @@ useEffect(() => {
 
       {/* Users Table */}
       <div className="bg-white border rounded-xl overflow-hidden shadow-sm">
+        {/* PERBAIKAN: Gunakan filteredUsers, bukan users asli */}
         <UniversalDataTable 
           columns={columns} 
-          data={users}
-          // Jika UniversalDataTable membutuhkan filter/search default bawaan,
-          // Anda biasanya dapat melemparkan props config search-nya di sini.
+          data={filteredUsers}
         />
       </div>
 
-      {/* Form Dialog (Dinamis Create/Update) */}
+      {/* Form Dialog */}
       <UserFormDialog 
         open={isDialogOpen}
         onOpenChange={setIsDialogOpen}

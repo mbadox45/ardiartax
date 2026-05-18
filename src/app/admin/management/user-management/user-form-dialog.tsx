@@ -12,9 +12,8 @@ import { Loader2 } from "lucide-react"
 export interface UserItem {
   id: string
   name: string
-  email: string
+  username: string
   role: "super_admin" | "admin" | "user"
-  status: "active" | "inactive"
 }
 
 interface UserFormDialogProps {
@@ -28,9 +27,8 @@ interface UserFormDialogProps {
 export function UserFormDialog({ open, onOpenChange, mode, selectedUser, onSubmit }: UserFormDialogProps) {
   const [formData, setFormData] = useState({
     name: "",
-    email: "",
+    username: "",
     role: "user" as UserItem["role"],
-    status: "active" as UserItem["status"]
   })
   const [isSubmitting, setIsSubmitting] = useState(false)
 
@@ -39,12 +37,11 @@ export function UserFormDialog({ open, onOpenChange, mode, selectedUser, onSubmi
     if (mode === "update" && selectedUser) {
       setFormData({
         name: selectedUser.name,
-        email: selectedUser.email,
+        username: selectedUser.username,
         role: selectedUser.role,
-        status: selectedUser.status
       })
     } else {
-      setFormData({ name: "", email: "", role: "user", status: "active" })
+      setFormData({ name: "", username: "", role: "user", status: "active" })
     }
   }, [mode, selectedUser, open])
 
@@ -72,7 +69,7 @@ export function UserFormDialog({ open, onOpenChange, mode, selectedUser, onSubmi
             </DialogDescription>
           </DialogHeader>
 
-          <div className="grid gap-4 py-2">
+          <div className="grid gap-4 py-2 w-full">
             <div className="grid gap-2">
               <Label htmlFor="name">Nama Lengkap</Label>
               <Input
@@ -88,14 +85,14 @@ export function UserFormDialog({ open, onOpenChange, mode, selectedUser, onSubmi
               <Input
                 id="email"
                 type="email"
-                value={formData.email}
-                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                value={formData.username}
+                onChange={(e) => setFormData({ ...formData, username: e.target.value })}
                 placeholder="johndoe@example.com"
                 required
                 disabled={mode === "update"} // Email biasanya unik dan tidak diubah
               />
             </div>
-            <div className="grid gap-2">
+            <div className="grid gap-2 w-full">
               <Label htmlFor="role">Role Akses</Label>
               <Select
                 value={formData.role}
@@ -108,21 +105,6 @@ export function UserFormDialog({ open, onOpenChange, mode, selectedUser, onSubmi
                   <SelectItem value="super_admin">Super Admin</SelectItem>
                   <SelectItem value="admin">Admin</SelectItem>
                   <SelectItem value="user">User</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="status">Status</Label>
-              <Select
-                value={formData.status}
-                onValueChange={(value: UserItem["status"]) => setFormData({ ...formData, status: value })}
-              >
-                <SelectTrigger id="status">
-                  <SelectValue placeholder="Pilih Status" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="active">Aktif</SelectItem>
-                  <SelectItem value="inactive">Nonaktif</SelectItem>
                 </SelectContent>
               </Select>
             </div>
