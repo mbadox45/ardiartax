@@ -1,3 +1,5 @@
+// /src/components/layout/nav-main.tsx
+
 "use client"
 
 import { ChevronRight, LucideIcon } from "lucide-react";

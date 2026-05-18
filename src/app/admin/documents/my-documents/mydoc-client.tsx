@@ -204,6 +204,7 @@ export default function MyDocClient() {
             toast.success(`File berhasil diunggah (${currentFolderStatus ? 'Shared' : 'Private'})`, { id: toastId, position: "top-center" });
             // Refresh daftar dokumen
             fetchDocuments(currentFolderId);
+            fetchStorageInfo();
         } catch (error: unknown) {
             const msg = error instanceof Error ? error.message : "Gagal upload";
             toast.error(msg, { id: toastId, position: "top-center" });
@@ -281,12 +282,12 @@ export default function MyDocClient() {
 
             if (!response.status) throw new Error("Gagal mengambil data storage");
 
-            const data = await response.json();
+            const data = await response.data;
             
             // Asumsi API mengembalikan { used: number, limit: number, percentage: number }
             setStorageInfo({
-                used: data.used_storage_mb,
-                limit: data.max_storage_mb,
+                used: data.used_storage_bytes,
+                limit: data.max_storage_bytes,
                 percentage: data.percentage
             });
         } catch (error) {
@@ -342,6 +343,7 @@ export default function MyDocClient() {
             await documentService.deleteDocument(selectedItem.id)
             toast.success(`${selectedItem.name} berhasil dihapus`, { position: "top-center" });
             fetchDocuments(currentFolderId)
+            fetchStorageInfo() // Refresh info storage setelah hapus
         } catch (error: unknown) {
             const msg = error instanceof Error ? error.message : "Gagal menghapus"
             toast.error(msg, { position: "top-center" });
@@ -370,6 +372,7 @@ export default function MyDocClient() {
             
             // 2. Refresh data
             fetchDocuments(currentFolderId);
+            fetchStorageInfo(); // Refresh info storage setelah hapus
         } catch (error: unknown) {
             const errorMessage = error instanceof Error ? error.message : "Terjadi kesalahan saat menghapus";
             toast.error(errorMessage, { id: toastId, position: "top-center" });

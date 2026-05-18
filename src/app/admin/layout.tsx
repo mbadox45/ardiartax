@@ -26,6 +26,7 @@ export default async function AdminLayout({
   // Ambil data di sisi server
   const userData = {
     name: cookieStore.get("name")?.value || "Guest",
+    role: cookieStore.get("role")?.value || "user",
     email: cookieStore.get("username")?.value || "guest@ardiartax.com",
     avatar: "/avatars/default.jpg",
   }
