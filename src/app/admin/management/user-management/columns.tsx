@@ -11,6 +11,8 @@ export type UserData = {
   id: string
   name: string
   username: string
+  group_name: string
+  group_id: string
   role: "super_admin" | "admin" | "user"
   status: true | false
 }
@@ -100,6 +102,11 @@ export const columns: ColumnDef<UserData>[] = [
       }
       return <Badge variant="secondary" className="shadow-none border-none text-xs font-medium">User</Badge>
     },
+  },
+  {
+    accessorKey: "group_name",
+    header: "Nama Group",
+    cell: ({ row }) => <div className="font-medium text-gray-900">{row.getValue("group_name") || "-"}</div>,
   },
   {
     id: "actions",
