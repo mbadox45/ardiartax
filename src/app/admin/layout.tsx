@@ -39,6 +39,7 @@ export default async function AdminLayout({
           "--header-height": "calc(var(--spacing) * 12)",
         } as React.CSSProperties
       }
+      className="bg-black"
     >
       <AppSidebar user={userData} />
 
