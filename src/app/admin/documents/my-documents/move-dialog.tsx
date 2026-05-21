@@ -7,49 +7,67 @@ import { FolderIcon, Loader2, ChevronRight, ArrowLeft } from "lucide-react"
 import { documentService } from "@/lib/api/documents.service"
 import { toast } from "sonner"
 
-// Definisikan tipe data item secara spesifik
+// Struktur data item folder yang diperluas sesuai parameter share baru
 interface FolderItem {
     id: string | number
     name: string
     is_folder: boolean
     is_shared: boolean
+    share_with_all?: boolean
+    group_ids?: number[]
 }
 
 interface MoveDialogProps {
     isOpen: boolean
     onOpenChange: (open: boolean) => void
     selectedCount: number
-    onConfirm: (targetId: string | number, targetSharedStatus: boolean) => void
+    // PERBAIKAN TIPE DATA: Menyesuaikan parameter targetFolder menggunakan Cara 1 (Inline Type Definition)
+    onConfirm: (
+        targetId: string | number, 
+        targetFolder: { is_shared?: boolean; share_with_all?: boolean; group_ids?: number[] } | null | undefined
+    ) => void
     isSubmitting: boolean
 }
 
 export function MoveDialog({ isOpen, onOpenChange, selectedCount, onConfirm, isSubmitting }: MoveDialogProps) {
-    // Ganti any[] menjadi FolderItem[]
     const [folders, setFolders] = useState<FolderItem[]>([])
     const [loading, setLoading] = useState(false)
     const [currentViewId, setCurrentViewId] = useState<string | number>(0)
-    const [selectedFolderId, setSelectedFolderId] = useState<FolderItem | null>(null)
+    const [selectedFolder, setSelectedFolder] = useState<FolderItem | null>(null) // Diubah namanya agar merepresentasikan objek utuh
 
     useEffect(() => {
         if (isOpen) {
             fetchFolders(currentViewId)
         }
         // Reset selection saat ganti folder agar tidak salah pilih
-        setSelectedFolderId(null)
+        setSelectedFolder(null)
     }, [isOpen, currentViewId])
 
     const fetchFolders = async (parentId: string | number) => {
         setLoading(true)
         try {
             const data = await documentService.getDocuments(parentId)
-            // Pastikan data dipetakan ke FolderItem dan difilter
+            
+            // Buat interface lokal untuk merepresentasikan data mentah dari API
+            interface APIResponseItem {
+                id: string | number;
+                name: string;
+                is_folder: boolean;
+                is_shared?: boolean;
+                share_with_all?: boolean;
+                group_ids?: number[];
+            }
+
+            // Terapkan tipe data APIResponseItem pada parameter filter dan map
             const onlyFolders = data
-                .filter((item: FolderItem) => item.is_folder)
-                .map((item: FolderItem) => ({
+                .filter((item: APIResponseItem) => item.is_folder)
+                .map((item: APIResponseItem) => ({
                     id: item.id,
                     name: item.name,
                     is_folder: item.is_folder,
-                    is_shared: item.is_shared
+                    is_shared: !!item.is_shared,
+                    share_with_all: !!item.share_with_all,
+                    group_ids: Array.isArray(item.group_ids) ? item.group_ids : []
                 }))
         
             setFolders(onlyFolders)
@@ -64,73 +82,75 @@ export function MoveDialog({ isOpen, onOpenChange, selectedCount, onConfirm, isS
         <Dialog open={isOpen} onOpenChange={onOpenChange}>
             <DialogContent className="sm:max-w-[425px]">
                 <DialogHeader>
-                <DialogTitle>Pindahkan {selectedCount} Item</DialogTitle>
+                    <DialogTitle>Pindahkan {selectedCount} Item</DialogTitle>
                 </DialogHeader>
                 
                 <div className="py-4">
                     <div className="flex items-center justify-between mb-4">
                         <p className="text-sm font-medium text-muted-foreground">Pilih folder tujuan:</p>
                         {currentViewId !== 0 && (
-                        <Button 
-                            variant="ghost" 
-                            size="sm" 
-                            onClick={() => setCurrentViewId(0)} 
-                            className="h-7 text-xs text-blue-600 hover:text-blue-700"
-                        >
-                            <ArrowLeft className="w-3 h-3 mr-1" /> Kembali ke Root
-                        </Button>
+                            <Button 
+                                variant="ghost" 
+                                size="sm" 
+                                onClick={() => setCurrentViewId(0)} 
+                                className="h-7 text-xs text-blue-600 hover:text-blue-700"
+                            >
+                                <ArrowLeft className="w-3 h-3 mr-1" /> Kembali ke Root
+                            </Button>
                         )}
                     </div>
                     
+                    {/* Opsi Pilihan Folder Root */}
                     <div 
-                        onClick={() => setSelectedFolderId({id: 0, name: "Root", is_folder: true, is_shared: false})}
+                        onClick={() => setSelectedFolder({ id: 0, name: "Root", is_folder: true, is_shared: false, share_with_all: false, group_ids: [] })}
                         className={`flex items-center gap-3 p-3 mb-2 cursor-pointer border rounded-lg transition-colors
-                        ${selectedFolderId?.id === 0 ? "bg-blue-100 border-blue-500" : "hover:bg-gray-50"}`}
+                        ${selectedFolder?.id === 0 ? "bg-blue-100 border-blue-500" : "hover:bg-gray-50"}`}
                     >
                         <FolderIcon className="w-5 h-5 text-blue-500" />
                         <span className="text-sm font-semibold text-blue-600">Pindahkan ke Root (My Drive)</span>
                     </div>
                     
+                    {/* Daftar Folder Anak */}
                     <div className="border rounded-xl max-h-[300px] overflow-y-auto bg-muted/20">
                         {loading ? (
-                        <div className="p-12 flex flex-col items-center gap-2">
-                            <Loader2 className="w-6 h-6 animate-spin text-blue-600" />
-                            <span className="text-xs text-muted-foreground">Memuat folder...</span>
-                        </div>
-                        ) : folders.length === 0 ? (
-                        <div className="p-12 text-center flex flex-col items-center gap-2">
-                            <FolderIcon className="w-8 h-8 text-muted-foreground/30" />
-                            <span className="text-sm text-muted-foreground">Tidak ada folder tujuan</span>
-                        </div>
-                        ) : (
-                        <div className="divide-y divide-border">
-                            {folders.map((folder) => (
-                            <div
-                                key={folder.id}
-                                onClick={() => setSelectedFolderId(folder)}
-                                className={`flex items-center gap-3 p-3 cursor-pointer transition-colors
-                                ${selectedFolderId?.id === folder.id 
-                                    ? "bg-blue-100/50" 
-                                    : "hover:bg-blue-50"}`}
-                            >
-                                <FolderIcon className={`w-5 h-5 ${selectedFolderId?.id === folder.id ? "text-blue-600 fill-blue-600/20" : "text-amber-400 fill-amber-400/20"}`} />
-                                <span className={`text-sm flex-1 truncate ${selectedFolderId?.id === folder.id ? "font-semibold text-blue-700" : ""}`}>
-                                {folder.name}
-                                </span>
-                                <Button 
-                                variant="ghost" 
-                                size="icon" 
-                                className="h-7 w-7 hover:bg-blue-200/50" 
-                                onClick={(e) => { 
-                                    e.stopPropagation(); 
-                                    setCurrentViewId(folder.id); 
-                                }}
-                                >
-                                <ChevronRight className="w-4 h-4" />
-                                </Button>
+                            <div className="p-12 flex flex-col items-center gap-2">
+                                <Loader2 className="w-6 h-6 animate-spin text-blue-600" />
+                                <span className="text-xs text-muted-foreground">Memuat folder...</span>
                             </div>
-                            ))}
-                        </div>
+                        ) : folders.length === 0 ? (
+                            <div className="p-12 text-center flex flex-col items-center gap-2">
+                                <FolderIcon className="w-8 h-8 text-muted-foreground/30" />
+                                <span className="text-sm text-muted-foreground">Tidak ada folder tujuan</span>
+                            </div>
+                        ) : (
+                            <div className="divide-y divide-border">
+                                {folders.map((folder) => (
+                                    <div
+                                        key={folder.id}
+                                        onClick={() => setSelectedFolder(folder)}
+                                        className={`flex items-center gap-3 p-3 cursor-pointer transition-colors
+                                        ${selectedFolder?.id === folder.id 
+                                            ? "bg-blue-100/50" 
+                                            : "hover:bg-blue-50"}`}
+                                    >
+                                        <FolderIcon className={`w-5 h-5 ${selectedFolder?.id === folder.id ? "text-blue-600 fill-blue-600/20" : "text-amber-400 fill-amber-400/20"}`} />
+                                        <span className={`text-sm flex-1 truncate ${selectedFolder?.id === folder.id ? "font-semibold text-blue-700" : ""}`}>
+                                            {folder.name}
+                                        </span>
+                                        <Button 
+                                            variant="ghost" 
+                                            size="icon" 
+                                            className="h-7 w-7 hover:bg-blue-200/50" 
+                                            onClick={(e) => { 
+                                                e.stopPropagation(); 
+                                                setCurrentViewId(folder.id); 
+                                            }}
+                                        >
+                                            <ChevronRight className="w-4 h-4" />
+                                        </Button>
+                                    </div>
+                                ))}
+                            </div>
                         )}
                     </div>
                 </div>
@@ -140,14 +160,15 @@ export function MoveDialog({ isOpen, onOpenChange, selectedCount, onConfirm, isS
                         Batal
                     </Button>
                     <Button 
-                        disabled={selectedFolderId === null || isSubmitting} 
-                        onClick={() => selectedFolderId && onConfirm(selectedFolderId.id, selectedFolderId.is_shared)}
+                        disabled={selectedFolder === null || isSubmitting} 
+                        // PERBAIKAN: Melemparkan objek folder utuh, bukan lagi sekadar status boolean
+                        onClick={() => selectedFolder && onConfirm(selectedFolder.id, selectedFolder)}
                         className="bg-blue-600 hover:bg-blue-700 text-white min-w-[120px]"
                     >
                         {isSubmitting ? (
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                         ) : (
-                        "Pindahkan ke Sini"
+                            "Pindahkan ke Sini"
                         )}
                     </Button>
                 </DialogFooter>

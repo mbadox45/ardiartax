@@ -197,23 +197,29 @@ class DocumentService {
     }
   }
 
-  async bulkShareDocuments(ids: (string | number)[], isShared: boolean) {
+  // POST /api/v1/documents/share
+  async bulkShareDocuments(payload: {
+    document_ids: (string | number)[];
+    is_shared: boolean;
+    share_with_all: boolean;
+    group_ids: number[];
+  }) {
     try {
-        const response = await fetch(`${this.baseUrl}/documents/share`, {
-            method: "POST",
-            headers: this.headers,
-            body: JSON.stringify({ document_ids: ids, is_shared: isShared }),
-        });
+      const response = await fetch(`${this.baseUrl}/documents/share`, {
+        method: "POST",
+        headers: this.headers,
+        body: JSON.stringify(payload), // Mengirim payload objek lengkap sesuai Swagger
+      });
 
-        if (!response.ok) {
-            const errorData = await response.json().catch(() => ({}));
-            throw new Error(errorData.message || "Gagal membagikan dokumen");
-        }
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || "Gagal memperbarui hak akses dokumen");
+      }
 
-        return await response.json();
+      return await response.json();
     } catch (error) {
-        console.error("DocumentService.bulkShareDocuments Error:", error);
-        throw error;
+      console.error("DocumentService.bulkShareDocuments Error:", error);
+      throw error;
     }
   }
 

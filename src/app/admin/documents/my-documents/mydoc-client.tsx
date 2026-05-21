@@ -23,6 +23,7 @@ import {
 // Components
 import { GridView, ListView } from "./document-views"
 import { MoveDialog } from "./move-dialog" // Import modal baru
+import { ShareDocumentDialog } from "./share-document-dialog"
 import HeaderPage from "@/components/layout/header-page"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -48,6 +49,7 @@ import { documentService } from "@/lib/api/documents.service"
 import { storageService } from "@/lib/api/storage.service"
 import { DeleteConfirmDialog } from "./delete-confirm-dialog"
 import { encryptData, decryptData } from "@/lib/crypto"
+import { groupService } from "@/lib/api/group.service"
 
 interface DocumentItem {
     id: string | number
@@ -70,6 +72,9 @@ export default function MyDocClient() {
     const searchParams = useSearchParams()
     
     const [selectedIds, setSelectedIds] = useState<Set<string | number>>(new Set())
+    const [isShareDialogOpen, setIsShareDialogOpen] = useState(false);
+    const [shareDocIds, setShareDocIds] = useState<number[]>([]);
+    const [groups, setGroups] = useState<{ id: number; name: string; parent_id?: number | null; level?: number }[]>([]);
     
     // --- STATE INITIALIZATION ---
     // Gunakan nilai default Root agar server & client render awal sama (cegah hydration error)
@@ -100,7 +105,7 @@ export default function MyDocClient() {
 
     const [storageInfo, setStorageInfo] = useState({used: 0, limit: 0, percentage: 0});
 
-        const handleRenameTrigger = (item: DocumentItem) => {
+    const handleRenameTrigger = (item: DocumentItem) => {
         setDialogMode("rename");
         setSelectedItemToRename(item);
         setFolderName(item.name); // Isi input dengan nama lama
@@ -112,7 +117,7 @@ export default function MyDocClient() {
         setSelectedItemToRename(null);
         setFolderName("");
         setIsDialogOpen(true);
-};
+    };
 
     const toggleSelection = useCallback((
         id: string | number, 
@@ -145,6 +150,22 @@ export default function MyDocClient() {
             setSelectedIds(new Set())
         }
     }
+
+    useEffect(() => {
+        const fetchGroupsData = async () => {
+            try {
+                // Gunakan service group Anda (misal: groupService.getAll() atau groupService.getGroupTree())
+                const data = await groupService.getAll(); 
+                
+                // Pastikan data berbentuk Array sebelum disimpan ke state
+                setGroups(Array.isArray(data) ? data : data.data || []);
+            } catch (error) {
+                console.error("Gagal mengambil data grup untuk sharing:", error);
+            }
+        };
+
+        fetchGroupsData();
+    }, []);
 
     // --- HYDRATION FIX: Sync URL data after mount ---
     useEffect(() => {
@@ -386,49 +407,83 @@ export default function MyDocClient() {
         setDeleteDialogOpen(true)
     }
 
-    const handleBulkMove = async (targetId: string | number, targetSharedStatus: boolean) => {
-        const idsArray = Array.from(selectedIds)
-        const toastId = toast.loading(`Memindahkan ${idsArray.length} item...`)
-        setIsMoving(true)
+    const handleBulkMove = async (
+        targetId: string | number, 
+        targetFolder: { is_shared?: boolean; share_with_all?: boolean; group_ids?: number[] } | null | undefined
+    ) => {
+        const idsArray = Array.from(selectedIds).map(Number); // Pastikan ID bertipe number[]
+        const toastId = toast.loading(`Memindahkan ${idsArray.length} item...`);
+        setIsMoving(true);
 
-        console.log("Memindahkan item:", idsArray, "ke folder:", targetId)
+        console.log("Memindahkan item:", idsArray, "ke folder:", targetId);
         try {
-            console.log(targetSharedStatus)
-            await documentService.bulkMoveDocuments(idsArray, targetId)
-            if (targetId !== 0) {
-                // Jika pindah ke folder tertentu, ikuti status folder tersebut (Inherit)
-                await documentService.bulkShareDocuments(idsArray, targetSharedStatus);
-                toast.success(`Berhasil dipindahkan & status disesuaikan dengan folder tujuan`, { id: toastId });
+            // 1. Jalankan proses pemindahan berkas ke folder tujuan
+            await documentService.bulkMoveDocuments(idsArray, targetId);
+            
+            // 2. Periksa apakah targetId bukan Root (0) dan targetFolder valid
+            if (targetId !== 0 && targetFolder) {
+                
+                // Ambil properti hak akses dari folder tujuan secara defensif dengan fallback nilai default
+                const targetIsShared = !!targetFolder.is_shared;
+                const targetShareWithAll = !!targetFolder.share_with_all;
+                const targetGroupIds = Array.isArray(targetFolder.group_ids) ? targetFolder.group_ids : [];
+
+                // 3. Eksekusi penyelarasan hak akses (Inherit Full Access)
+                await documentService.bulkShareDocuments({
+                    document_ids: idsArray,
+                    is_shared: targetIsShared,
+                    share_with_all: targetShareWithAll,
+                    group_ids: targetGroupIds
+                });
+                
+                toast.success(`Berhasil dipindahkan & hak akses diselaraskan dengan folder tujuan`, { id: toastId });
             } else {
-                // Jika pindah ke Root, biarkan status shared dokumen apa adanya (Keep original)
+                // Jika dipindahkan kembali ke Root, biarkan status akses dokumen apa adanya
                 toast.success(`Berhasil dipindahkan ke Root (Status akses tetap)`, { id: toastId });
             }
             
-            setIsMoveDialogOpen(false)
-            setSelectedIds(new Set())
-            fetchDocuments(currentFolderId)
-        } catch (error: unknown) {
-            toast.error(error instanceof Error ? error.message : "Gagal memindahkan item", { id: toastId, position: "top-center" })
-        } finally {
-            setIsMoving(false)
-        }
-    }
-
-    const handleBulkShare = async (status: boolean) => {
-        const idsArray = Array.from(selectedIds);
-        const actionText = status ? "Membagikan" : "Membatalkan berbagi";
-        const toastId = toast.loading(`${actionText} ${idsArray.length} item...`);
-        setIsSharing(true);
-
-        try {
-            await documentService.bulkShareDocuments(idsArray, status);
-            toast.success(`Berhasil memperbarui akses ${idsArray.length} item`, { id: toastId, position: "top-center" });
-            
-            // Bersihkan seleksi dan refresh data
+            setIsMoveDialogOpen(false);
             setSelectedIds(new Set());
             fetchDocuments(currentFolderId);
         } catch (error: unknown) {
-            toast.error(error instanceof Error ? error.message : "Gagal memperbarui akses share", { id: toastId, position: "top-center" });
+            toast.error(error instanceof Error ? error.message : "Gagal memindahkan item", { id: toastId, position: "top-center" });
+        } finally {
+            setIsMoving(false);
+        }
+    };
+
+    // Jalankan fungsi ini ketika user menekan tombol "Simpan & Bagikan" di dalam Modal Dialog
+    const handleBulkShare = async (shareScope: "all" | "specific", selectedGroupIds: number[]) => {
+        const idsArray = Array.from(selectedIds).map(Number); // Pastikan bertipe number[]
+        
+        const toastId = toast.loading(`Membagikan ${idsArray.length} item...`);
+        setIsSharing(true);
+
+        try {
+            // Panggil API dengan parameter objek terstruktur yang baru
+            await documentService.bulkShareDocuments({
+                document_ids: idsArray,
+                is_shared: true,
+                share_with_all: shareScope === "all",
+                group_ids: shareScope === "all" ? [] : selectedGroupIds
+            });
+
+            toast.success(`Berhasil membagikan ${idsArray.length} item`, { 
+                id: toastId, 
+                position: "top-center" 
+            });
+            
+            // Bersihkan seleksi checkbox dan tutup modal
+            setSelectedIds(new Set());
+            setIsShareDialogOpen(false); 
+            
+            // Refresh tabel folder aktif
+            fetchDocuments(currentFolderId);
+        } catch (error: unknown) {
+            toast.error(
+                error instanceof Error ? error.message : "Gagal memperbarui akses share", 
+                { id: toastId, position: "top-center" }
+            );
         } finally {
             setIsSharing(false);
         }
@@ -440,11 +495,18 @@ export default function MyDocClient() {
         if (window.confirm(confirmMessage)) {
             const toastId = toast.loading("Membatalkan berbagi...");
             try {
-            await documentService.bulkShareDocuments([item.id], false);
-            toast.success("Akses berbagi dicabut", { id: toastId });
-            fetchDocuments(currentFolderId); // Refresh data
+                // PERBAIKAN: Ubah parameter menjadi objek tunggal sesuai dengan arsitektur baru
+                await documentService.bulkShareDocuments({
+                    document_ids: [Number(item.id)], // Pastikan ID dikonversi menjadi number jika diperlukan
+                    is_shared: false,                 // Mencabut status berbagi
+                    share_with_all: false,            // Menonaktifkan flag share ke semua grup
+                    group_ids: []                     // Mengosongkan relasi grup divisi
+                });
+
+                toast.success("Akses berbagi dicabut", { id: toastId });
+                fetchDocuments(currentFolderId); // Refresh data tabel privat
             } catch (error) {
-            toast.error("Gagal mengubah status", { id: toastId });
+                toast.error("Gagal mengubah status", { id: toastId });
             }
         }
     };
@@ -542,7 +604,7 @@ export default function MyDocClient() {
                             <FolderPlus className="w-4 h-4" />
                             <span className="sm:block hidden">Pindah</span>
                         </Button>
-                        <Button variant="ghost" className="text-white hover:bg-cyan-700 hover:text-white gap-2 h-9" onClick={() => handleBulkShare(true)} // Set is_shared: true
+                        <Button variant="ghost" className="text-white hover:bg-cyan-700 hover:text-white gap-2 h-9" onClick={() => setIsShareDialogOpen(true)} // Set is_shared: true
                             disabled={isSharing}>
                             {isSharing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Share2 className="w-4 h-4" />}
                             <span className="sm:block hidden">{isSharing ? "Sedang membagikan..." : "Bagikan"}</span>
@@ -729,6 +791,16 @@ export default function MyDocClient() {
                 selectedCount={selectedIds.size}
                 onConfirm={(id, shared) => handleBulkMove(id, shared)}
                 isSubmitting={isMoving}
+            />
+            
+            <ShareDocumentDialog
+                open={isShareDialogOpen}
+                onOpenChange={setIsShareDialogOpen}
+                selectedDocumentIds={Array.from(selectedIds).map(Number)}
+                groups={groups || []} // Pastikan selalu mengirim array, meskipun kosong
+                // Trigger fungsi handleBulkShare di atas dengan mengirimkan data dari dalam modal
+                onSave={(scope, groupIds) => handleBulkShare(scope, groupIds)} 
+                isSubmitting={isSharing} // Supaya tombol di modal ikut loading saat API di halaman utama berjalan
             />
         </div>
     )
