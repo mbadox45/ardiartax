@@ -5,48 +5,64 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { ColumnDef, Row } from "@tanstack/react-table"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { Edit2, Trash2, CheckCircle2, XCircle } from "lucide-react"
+import { Edit2, Trash2, KeyRound, CheckCircle2, XCircle } from "lucide-react"
 
 export type UserData = {
-  id: string
+  id: number | string
   name: string
   username: string
-  group_name: string
-  group_id: string
   role: "super_admin" | "admin" | "user"
-  status: true | false
+  group_id: number
+  group_name?: string // Opsional, jika API menyertakan nama grupnya langsung
+  is_active?: boolean // Menyesuaikan Swagger, status keaktifan menggunakan boolean
 }
 
-// Komponen Khusus untuk Kolom Aksi (Edit & Delete)
+// Komponen Khusus untuk Kolom Aksi
 const ActionsCell = ({ row }: { row: Row<UserData> }) => {
   const user = row.original
 
   const handleEdit = () => {
-    // Memicu custom event yang nantinya akan didengar di users-client.tsx
-    const event = new CustomEvent("user-action-edit", { detail: user })
-    window.dispatchEvent(event)
+    window.dispatchEvent(new CustomEvent("user-action-edit", { detail: user }))
   }
 
   const handleDelete = () => {
-    // Memicu custom event untuk delete
-    const event = new CustomEvent("user-action-delete", { detail: user })
-    window.dispatchEvent(event)
+    window.dispatchEvent(new CustomEvent("user-action-delete", { detail: user }))
+  }
+
+  const handleResetPassword = () => {
+    window.dispatchEvent(new CustomEvent("user-action-reset-password", { detail: user }))
   }
 
   return (
     <div className="flex items-center justify-end gap-1">
+      {/* Tombol Reset Password */}
+      <Button 
+        variant="ghost" 
+        size="icon" 
+        className="h-8 w-8 text-gray-600 hover:text-amber-600 hover:bg-amber-50"
+        title="Reset Password"
+        onClick={handleResetPassword}
+      >
+        <KeyRound className="w-3.5 h-3.5" />
+      </Button>
+
+      {/* Tombol Edit */}
       <Button 
         variant="ghost" 
         size="icon" 
         className="h-8 w-8 text-gray-600 hover:text-blue-600 hover:bg-blue-50"
+        title="Ubah User"
         onClick={handleEdit}
       >
         <Edit2 className="w-3.5 h-3.5" />
       </Button>
+
+      {/* Tombol Delete */}
       <Button 
         variant="ghost" 
         size="icon" 
         className="h-8 w-8 text-gray-600 hover:text-red-600 hover:bg-red-50"
+        title="Hapus User"
         onClick={handleDelete}
       >
         <Trash2 className="w-3.5 h-3.5" />
@@ -85,8 +101,21 @@ export const columns: ColumnDef<UserData>[] = [
   },
   {
     accessorKey: "username",
-    header: "Email",
+    header: "Username",
     cell: ({ row }) => <div className="text-muted-foreground font-mono text-xs">{row.getValue("username")}</div>,
+  },
+  {
+    accessorKey: "group_name",
+    header: "Grup / Divisi",
+    cell: ({ row }) => {
+      const groupName = row.getValue("group_name") as string
+      const groupId = row.original.group_id
+      return (
+        <div className="text-sm text-gray-700">
+          {groupName || `Grup ID #${groupId}`}
+        </div>
+      )
+    },
   },
   {
     accessorKey: "role",
@@ -104,9 +133,30 @@ export const columns: ColumnDef<UserData>[] = [
     },
   },
   {
-    accessorKey: "group_name",
-    header: "Nama Group",
-    cell: ({ row }) => <div className="font-medium text-gray-900">{row.getValue("group_name") || "-"}</div>,
+    accessorKey: "is_active",
+    header: "Status",
+    cell: ({ row }) => {
+      const isActive = row.getValue("is_active") ?? true // Fallback true jika nilainya kosong
+      
+      return (
+        <Badge 
+          variant={isActive ? "default" : "secondary"}
+          className={`gap-1 text-white text-xs shadow-none border-none ${
+            isActive ? "bg-green-700" : "bg-gray-500"
+          }`}
+        >
+          {isActive ? (
+            <>
+              <CheckCircle2 className="size-3" /> Aktif
+            </>
+          ) : (
+            <>
+              <XCircle className="size-3" /> Nonaktif
+            </>
+          )}
+        </Badge>
+      )
+    },
   },
   {
     id: "actions",

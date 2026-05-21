@@ -1,10 +1,8 @@
 // src/app/admin/management/user-management/users-client.tsx
 "use client"
 
-// 1. Pastikan useCallback di-import
 import { useState, useEffect, useCallback } from "react"
-import { v4 as uuidv4 } from "uuid"
-import { Plus, Search } from "lucide-react"
+import { Plus, Search, Loader2 } from "lucide-react"
 import { toast } from "sonner"
 
 // Components
@@ -13,113 +11,178 @@ import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { UniversalDataTable } from "@/components/layout/universal-data-table"
 import { columns, UserData } from "./columns"
-import { UserFormDialog } from "./user-form-dialog"
-import { userService } from "@/lib/api/user.service"
+import { UserFormDialog, ResetPasswordDialog } from "./user-form-dialog"
 
-export default function UsersClient() {
+// Services
+import { userService } from "@/lib/api/user.service"
+import { groupService } from "@/lib/api/group.service"
+
+export default function UserClient() {
   const [users, setUsers] = useState<UserData[]>([])
+  const [groups, setGroups] = useState<any[]>([])
   const [searchQuery, setSearchQuery] = useState("")
+  const [isLoading, setIsLoading] = useState(true)
   
-  // State Dialog Control
+  // State Dialog Control (Form Create/Update)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [dialogMode, setDialogMode] = useState<"create" | "update">("create")
   const [selectedUser, setSelectedUser] = useState<UserData | null>(null)
 
-  // Fetch Data dari API Service
-  const fetchUsers = useCallback(async () => {
+  // State Dialog Control (Reset Password)
+  const [isResetDialogOpen, setIsResetDialogOpen] = useState(false)
+
+  // ==========================================
+  // FETCH DATA: Users & Groups
+  // ==========================================
+  const fetchData = useCallback(async () => {
+    setIsLoading(true)
     try {
-      const data = await userService.getAll()
-      setUsers(data)
+      // Ambil data users dan groups secara paralel
+      const [usersData, groupsData] = await Promise.all([
+        userService.getAll(),
+        groupService.getAll()
+      ])
+
+      // Mapping nama grup ke dalam data user berdasarkan group_id untuk kebutuhan kolom tabel
+      const flatGroups = Array.isArray(groupsData) ? groupsData : []
+      const flatUsers = Array.isArray(usersData) ? usersData : []
+      
+      const mappedUsers = flatUsers.map((user: any) => {
+        const foundGroup = flatGroups.find((g: any) => g.id === user.group_id)
+        return {
+          ...user,
+          group_name: foundGroup ? foundGroup.name : `Grup ID #${user.group_id}`
+        }
+      })
+
+      setUsers(mappedUsers)
+      setGroups(flatGroups)
     } catch (error) {
-      toast.error("Gagal memuat data pengguna")
+      toast.error("Gagal sinkronisasi data dari server")
+      setUsers([])
+    } finally {
+      setIsLoading(false)
     }
   }, [])
 
-  // Jalankan fetch saat mount
   useEffect(() => {
-    fetchUsers()
-  }, [fetchUsers])
+    fetchData()
+  }, [fetchData])
 
-  // 2. PERBAIKAN UTAMA: Pasang kembali Event Listener dari columns.tsx
+
+  // ==========================================
+  // BINDING EVENT LISTENERS FROM COLUMNS
+  // ==========================================
   useEffect(() => {
     const handleEditEvent = (e: Event) => {
       const user = (e as CustomEvent).detail
-      handleUpdateTrigger(user)
+      setDialogMode("update")
+      setSelectedUser(user)
+      setIsDialogOpen(true)
     }
 
     const handleDeleteEvent = (e: Event) => {
       const user = (e as CustomEvent).detail
-      handleDeleteUser(user.id, user.name)
+      handleDeleteUser(user)
+    }
+
+    const handleResetPasswordEvent = (e: Event) => {
+      const user = (e as CustomEvent).detail
+      setSelectedUser(user)
+      setIsResetDialogOpen(true) // Membuka modal konfirmasi reset password
     }
 
     window.addEventListener("user-action-edit", handleEditEvent)
     window.addEventListener("user-action-delete", handleDeleteEvent)
+    window.addEventListener("user-action-reset-password", handleResetPasswordEvent)
 
     return () => {
       window.removeEventListener("user-action-edit", handleEditEvent)
       window.removeEventListener("user-action-delete", handleDeleteEvent)
+      window.removeEventListener("user-action-reset-password", handleResetPasswordEvent)
     }
   }, [])
 
-  // Filter User berdasarkan pencarian Nama / Email
-  const filteredUsers = users.filter(user => 
-    user.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    user.username?.toLowerCase().includes(searchQuery.toLowerCase())
-  )
 
-  // Triggers
+  // ==========================================
+  // MUTATION HANDLERS (CRUD & ACTIONS)
+  // ==========================================
   const handleCreateTrigger = () => {
     setDialogMode("create")
     setSelectedUser(null)
     setIsDialogOpen(true)
   }
 
-  const handleUpdateTrigger = (user: UserData) => {
-    setDialogMode("update")
-    setSelectedUser(user)
-    setIsDialogOpen(true)
-  }
-
-  // Actions
-  const handleFormSubmit = async (data: Omit<UserData, "id"> & { id?: string }) => {
-    // TODO: Ganti dengan service riil jika endpoint POST/PUT sudah siap
-    await new Promise((resolve) => setTimeout(resolve, 800))
-
-    if (dialogMode === "create") {
-      const newUser: UserData = {
-        id: uuidv4(),
-        name: data.name,
-        username: data.username,
-        role: data.role,
-        status: data.status
+  const handleFormSubmit = async (payload: any) => {
+    try {
+      if (dialogMode === "create") {
+        await userService.create({
+          name: payload.name,
+          username: payload.username,
+          password: payload.password,
+          role: payload.role,
+          group_id: payload.group_id
+        })
+        toast.success("Pengguna baru berhasil terdaftar")
+      } else {
+        await userService.update(payload.id, {
+          name: payload.name,
+          username: payload.username,
+          role: payload.role,
+          group_id: payload.group_id,
+          is_active: payload.is_active
+        })
+        toast.success("Data profil pengguna diperbarui")
       }
-      setUsers([newUser, ...users])
-      toast.success("User berhasil ditambahkan")
-    } else {
-      setUsers(users.map(u => u.id === data.id ? { ...u, ...data } as UserData : u))
-      toast.success("Data user berhasil diperbarui")
+      fetchData() // Refresh tabel agar tersinkronisasi kembali
+    } catch (error: any) {
+      toast.error(error.message || "Gagal menyimpan data pengguna")
+      throw error
     }
   }
 
-  const handleDeleteUser = (id: string, name: string) => {
-    if (confirm(`Apakah Anda yakin ingin menghapus user ${name}?`)) {
-      // TODO: Ganti dengan userService.delete(id) jika sudah siap
-      setUsers(users.filter(u => u.id !== id))
-      toast.success("User berhasil dihapus")
+  const handleDeleteUser = async (user: UserData) => {
+    if (confirm(`Apakah Anda yakin ingin menghapus akun "${user.name}"?`)) {
+      try {
+        await userService.delete(user.id)
+        toast.success("Pengguna berhasil dihapus")
+        fetchData()
+      } catch (error: any) {
+        toast.error(error.message || "Gagal menghapus pengguna")
+      }
     }
   }
+
+  const handleConfirmResetPassword = async (userId: string | number) => {
+    try {
+      await userService.resetPassword(userId)
+      toast.success("Kata sandi berhasil di-reset ke pengaturan sistem")
+      fetchData()
+    } catch (error: any) {
+      toast.error(error.message || "Gagal mereset kata sandi")
+      throw error
+    }
+  }
+
+  // Filter Data Berdasarkan Pencarian di Client-side
+  const filteredUsers = Array.isArray(users)
+    ? users.filter(user => 
+        user?.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        user?.username?.toLowerCase().includes(searchQuery.toLowerCase())
+      )
+    : []
 
   return (
     <div className="pb-6 pt-3 px-6 space-y-6">
       {/* Header */}
-      <HeaderPage title="User Management" description="Kelola pengguna dan akses mereka" />
+      <HeaderPage title="User Management" description="Kelola hak akses pendaftaran karyawan dan penempatan divisi" />
 
       {/* Toolbar */}
       <div className="flex items-center justify-between gap-4 bg-white p-3 rounded-lg border shadow-sm">
         <div className="relative flex-1 max-w-sm">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <Input 
-            placeholder="Cari nama atau email..." 
+            placeholder="Cari nama atau username..." 
             className="pl-9 bg-muted/40 border-none focus-visible:ring-1"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
@@ -132,22 +195,36 @@ export default function UsersClient() {
         </Button>
       </div>
 
-      {/* Users Table */}
-      <div className="bg-white border rounded-xl overflow-hidden shadow-sm">
-        {/* PERBAIKAN: Gunakan filteredUsers, bukan users asli */}
-        <UniversalDataTable 
-          columns={columns} 
-          data={filteredUsers}
-        />
+      {/* Main Data Table */}
+      <div className="bg-white border rounded-xl overflow-hidden shadow-sm relative min-h-[200px]">
+        {isLoading ? (
+          <div className="absolute inset-0 flex items-center justify-center bg-white/50 z-10">
+            <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+          </div>
+        ) : (
+          <UniversalDataTable 
+            columns={columns} 
+            data={filteredUsers}
+          />
+        )}
       </div>
 
-      {/* Form Dialog */}
+      {/* Form Dialog: Create & Update */}
       <UserFormDialog 
         open={isDialogOpen}
         onOpenChange={setIsDialogOpen}
         mode={dialogMode}
         selectedUser={selectedUser}
+        groups={groups} // Melempar data grup riil ke dropdown
         onSubmit={handleFormSubmit}
+      />
+
+      {/* Confirmation Dialog: Reset Password */}
+      <ResetPasswordDialog 
+        open={isResetDialogOpen}
+        onOpenChange={setIsResetDialogOpen}
+        selectedUser={selectedUser}
+        onConfirm={handleConfirmResetPassword}
       />
     </div>
   )

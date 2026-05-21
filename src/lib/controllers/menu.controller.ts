@@ -90,9 +90,9 @@ export const menuForSuperAdmin: MenuItem[] = [
                 url: "/admin/management/user-management",
             },
             {
-                title: "Store Management",
+                title: "Storage Management",
                 icon: HardDrive,
-                url: "/admin/management/store-management",
+                url: "/admin/management/storage-management",
             },
             {
                 title: "Group Management",

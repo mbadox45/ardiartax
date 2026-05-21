@@ -2,73 +2,58 @@
 "use client"
 
 import { useState, useEffect, useCallback } from "react"
-import { Plus, Search, Loader2 } from "lucide-react"
+import { Plus, Search, Loader2, Folder, FolderOpen, ChevronRight, ChevronDown, Edit2, Trash2 } from "lucide-react"
 import { toast } from "sonner"
 
 // Components
 import HeaderPage from "@/components/layout/header-page"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
-import { UniversalDataTable } from "@/components/layout/universal-data-table"
-import { columns, GroupData } from "./columns"
+import { Badge } from "@/components/ui/badge"
 import { GroupFormDialog } from "./group-form-dialog"
 import { groupService } from "@/lib/api/group.service"
 
+// Definisikan Tipe Data Rekursif
+interface GroupNodeData {
+  id: number
+  name: string
+  is_active: boolean
+  parent_id: number | null
+  sub_groups: GroupNodeData[]
+}
+
 export default function GroupClient() {
-  const [groups, setGroups] = useState<GroupData[]>([])
+  const [treeData, setTreeData] = useState<GroupNodeData[]>([])
+  const [flatGroups, setFlatGroups] = useState<any[]>([]) // Diperlukan untuk dropdown list parent di Form Dialog
   const [searchQuery, setSearchQuery] = useState("")
   const [isLoading, setIsLoading] = useState(true)
-  
+
   // State Dialog Control
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [dialogMode, setDialogMode] = useState<"create" | "update">("create")
-  const [selectedGroup, setSelectedGroup] = useState<GroupData | null>(null)
+  const [selectedGroup, setSelectedGroup] = useState<any>(null)
 
-  // Fetch data dari API menggunakan endpoint flat list (/api/v1/groups/)
-  const fetchGroups = useCallback(async () => {
+  // Fetch data struktur Tree
+  const fetchGroupTree = useCallback(async () => {
     setIsLoading(true)
     try {
-      const data = await groupService.getTree()
-      setGroups(Array.isArray(data) ? data : [])
+      // 1. Ambil data hierarki (Tree)
+      const treeRes = await groupService.getTree()
+      setTreeData(Array.isArray(treeRes) ? treeRes : [])
+
+      // 2. Ambil data flat (untuk kebutuhan isi dropdown parent pada Form Dialog)
+      const flatRes = await groupService.getAll()
+      setFlatGroups(Array.isArray(flatRes) ? flatRes : [])
     } catch (error) {
-      toast.error("Gagal memuat data grup")
-      setGroups([])
+      toast.error("Gagal memuat struktur grup")
     } finally {
       setIsLoading(false)
     }
   }, [])
 
   useEffect(() => {
-    fetchGroups()
-  }, [fetchGroups])
-
-  // Pasang Event Listener untuk aksi Edit & Delete dari columns.tsx
-  useEffect(() => {
-    const handleEditEvent = (e: Event) => {
-      const group = (e as CustomEvent).detail
-      setDialogMode("update")
-      setSelectedGroup(group)
-      setIsDialogOpen(true)
-    }
-
-    const handleDeleteEvent = (e: Event) => {
-      const group = (e as CustomEvent).detail
-      handleDeleteGroup(group)
-    }
-
-    window.addEventListener("group-action-edit", handleEditEvent)
-    window.addEventListener("group-action-delete", handleDeleteEvent)
-
-    return () => {
-      window.removeEventListener("group-action-edit", handleEditEvent)
-      window.removeEventListener("group-action-delete", handleDeleteEvent)
-    }
-  }, [])
-
-  // Defensif filter data array grup
-  const filteredGroups = Array.isArray(groups)
-    ? groups.filter(group => group?.name?.toLowerCase().includes(searchQuery.toLowerCase()))
-    : []
+    fetchGroupTree()
+  }, [fetchGroupTree])
 
   const handleCreateTrigger = () => {
     setDialogMode("create")
@@ -76,10 +61,27 @@ export default function GroupClient() {
     setIsDialogOpen(true)
   }
 
+  const handleEditTrigger = (group: GroupNodeData) => {
+    setDialogMode("update")
+    setSelectedGroup(group)
+    setIsDialogOpen(true)
+  }
+
+  const handleDeleteGroup = async (group: GroupNodeData) => {
+    if (confirm(`Apakah Anda yakin ingin menghapus grup "${group.name}" beserta sub-grup di dalamnya?`)) {
+      try {
+        await groupService.delete(group.id)
+        toast.success("Grup berhasil dihapus")
+        fetchGroupTree()
+      } catch (error) {
+        toast.error("Gagal menghapus grup")
+      }
+    }
+  }
+
   const handleFormSubmit = async (payload: any) => {
     try {
       if (dialogMode === "create") {
-        if (payload.parent_id === 0) payload.parent_id = null // Normalisasi parent_id untuk root grup
         await groupService.create({ name: payload.name, parent_id: payload.parent_id })
         toast.success("Grup baru berhasil dibuat")
       } else {
@@ -90,29 +92,17 @@ export default function GroupClient() {
         })
         toast.success("Data grup berhasil diperbarui")
       }
-      fetchGroups() // Refresh table otomatis
+      fetchGroupTree()
     } catch (error: any) {
-      toast.error(error.message || "Gagal memproses pengiriman data")
+      toast.error(error.message || "Gagal memproses data")
       throw error
-    }
-  }
-
-  const handleDeleteGroup = async (group: GroupData) => {
-    if (confirm(`Apakah Anda yakin ingin menghapus grup "${group.name}"?`)) {
-      try {
-        await groupService.delete(group.id)
-        toast.success("Grup berhasil dihapus")
-        fetchGroups()
-      } catch (error) {
-        toast.error("Gagal menghapus grup")
-      }
     }
   }
 
   return (
     <div className="pb-6 pt-3 px-6 space-y-6">
       {/* Header */}
-      <HeaderPage title="Group Management" description="Kelola grup dan akses mereka" />
+      <HeaderPage title="Group Management" description="Kelola grup dan struktur hierarki organisasi" />
 
       {/* Toolbar */}
       <div className="flex items-center justify-between gap-4 bg-white p-3 rounded-lg border shadow-sm">
@@ -132,26 +122,130 @@ export default function GroupClient() {
         </Button>
       </div>
 
-      {/* Table Section */}
-      <div className="bg-white border rounded-xl shadow-sm relative min-h-[200px]">
+      {/* Custom Tree List Section */}
+      <div className="bg-white border rounded-xl p-4 shadow-sm min-h-[200px] relative">
         {isLoading ? (
-          <div className="absolute inset-0 flex items-center justify-center bg-white/50 z-10">
+          <div className="absolute inset-0 flex items-center justify-center bg-white/50">
             <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
           </div>
+        ) : treeData.length === 0 ? (
+          <div className="text-center text-muted-foreground py-8">Belum ada grup yang terdaftar.</div>
         ) : (
-          <UniversalDataTable columns={columns} data={filteredGroups} />
+          <div className="space-y-1">
+            {treeData
+              // Filter pencarian sederhana untuk level root (atau biarkan recursive component menangani filter jika kompleks)
+              .filter(node => node.name.toLowerCase().includes(searchQuery.toLowerCase()) || node.sub_groups.some(sub => sub.name.toLowerCase().includes(searchQuery.toLowerCase())))
+              .map((node) => (
+                <GroupNode 
+                  key={node.id} 
+                  node={node} 
+                  level={0} 
+                  onEdit={handleEditTrigger} 
+                  onDelete={handleDeleteGroup}
+                />
+              ))
+            }
+          </div>
         )}
       </div>
 
-      {/* Dynamic Modal Dialog */}
+      {/* Form Dialog Modal */}
       <GroupFormDialog 
         open={isDialogOpen}
         onOpenChange={setIsDialogOpen}
         mode={dialogMode}
         selectedGroup={selectedGroup}
-        allGroups={groups}
+        allGroups={flatGroups} // Menggunakan flat data agar dropdown bisa memilih semua grup
         onSubmit={handleFormSubmit}
       />
+    </div>
+  )
+}
+
+// =========================================================
+// SUB-KOMPONEN: Rekursif Node List (`GroupNode`)
+// =========================================================
+interface GroupNodeProps {
+  node: GroupNodeData
+  level: number
+  onEdit: (node: GroupNodeData) => void
+  onDelete: (node: GroupNodeData) => void
+}
+
+function GroupNode({ node, level, onEdit, onDelete }: GroupNodeProps) {
+  const [isOpen, setIsOpen] = useState(true) // Default terbuka
+  const hasSubGroups = node.sub_groups && node.sub_groups.length > 0
+
+  return (
+    <div className="space-y-1">
+      {/* Baris Item Grup */}
+      <div 
+        className="flex items-center justify-between p-2 rounded-lg hover:bg-gray-50 transition-colors border border-transparent hover:border-gray-100 group"
+        style={{ paddingLeft: `${level * 24 + 8}px` }} // Indentasi dinamis berdasarkan kedalaman level anak
+      >
+        <div className="flex items-center gap-2">
+          {/* Tombol Tolggle Expand/Collapse */}
+          <button 
+            type="button"
+            onClick={() => setIsOpen(!isOpen)}
+            className={`p-0.5 rounded hover:bg-gray-200 text-gray-500 transition-opacity ${hasSubGroups ? "opacity-100" : "opacity-0 pointer-events-none"}`}
+          >
+            {isOpen ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+          </button>
+
+          {/* Ikon Folder Status */}
+          <span className="text-blue-500">
+            {hasSubGroups && isOpen ? <FolderOpen className="w-4 h-4 fill-blue-50" /> : <Folder className="w-4 h-4 fill-blue-50" />}
+          </span>
+
+          {/* Nama Grup */}
+          <span className="font-medium text-sm text-gray-900">{node.name}</span>
+
+          {/* Badge Status Keaktifan */}
+          {!node.is_active && (
+            <Badge variant="secondary" className="bg-rose-50 text-rose-600 text-[10px] px-1.5 py-0 border-none shadow-none">
+              Nonaktif
+            </Badge>
+          )}
+        </div>
+
+        {/* Tombol Aksi - Muncul atau Lebih Jelas saat di-hover */}
+        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+          <Button 
+            variant="ghost" 
+            size="icon" 
+            className="h-7 w-7 text-gray-500 hover:text-blue-600 hover:bg-blue-50"
+            onClick={() => onEdit(node)}
+          >
+            <Edit2 className="w-3 h-3" />
+          </Button>
+          <Button 
+            variant="ghost" 
+            size="icon" 
+            className="h-7 w-7 text-gray-500 hover:text-red-600 hover:bg-red-50"
+            onClick={() => onDelete(node)}
+          >
+            <Trash2 className="w-3 h-3" />
+          </Button>
+        </div>
+      </div>
+
+      {/* Render Anak (Sub-Groups) secara Rekursif */}
+      {hasSubGroups && isOpen && (
+        <div className="relative before:absolute before:left-[19px] before:top-0 before:bottom-3 before:w-[1px] before:bg-gray-200" style={{ marginLeft: `${level * 24}px` }}>
+          <div className="space-y-1">
+            {node.sub_groups.map((subNode) => (
+              <GroupNode 
+                key={subNode.id} 
+                node={subNode} 
+                level={level + 1} // Tambah level kedalaman
+                onEdit={onEdit} 
+                onDelete={onDelete}
+              />
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   )
 }
