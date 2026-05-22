@@ -51,11 +51,35 @@ export function ShareDocumentDialog({
     }
   }, [open])
 
+  // Fungsi rekursif untuk mencari semua ID anak/sub-grup di bawah grup tertentu
+  const getAllChildIds = (parentId: number): number[] => {
+    const childs = groups.filter((g) => g.parent_id === parentId)
+    let childIds = childs.map((g) => g.id)
+    
+    // Cari lagi jika sub-grup memiliki sub-grup di bawahnya (multi-level)
+    childs.forEach((c) => {
+      childIds = [...childIds, ...getAllChildIds(c.id)]
+    })
+    
+    return childIds
+  }
+
   const handleGroupCheckboxChange = (groupId: number, checked: boolean) => {
+    // Ambil semua daftar ID sub-grup dari grup yang di-klik
+    const childGroupIds = getAllChildIds(groupId)
+    const allTargetIds = [groupId, ...childGroupIds]
+
     if (checked) {
-      setSelectedGroupIds((prev) => [...prev, groupId])
+      setSelectedGroupIds((prev) => {
+        // Gabungkan state lama dengan target IDs baru, lalu hilangkan duplikasi dengan Set
+        const newSet = new Set([...prev, ...allTargetIds])
+        return Array.from(newSet)
+      })
     } else {
-      setSelectedGroupIds((prev) => prev.filter((id) => id !== groupId))
+      setSelectedGroupIds((prev) => {
+        // Saring keluar semua ID grup induk beserta seluruh sub-grupnya
+        return prev.filter((id) => !allTargetIds.includes(id))
+      })
     }
   }
 

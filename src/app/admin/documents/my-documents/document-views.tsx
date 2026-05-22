@@ -18,11 +18,12 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog"
+import DocViewer, { DocViewerRenderers } from "@cyntler/react-doc-viewer"
+import "@cyntler/react-doc-viewer/dist/index.css"
 import { Button } from "@/components/ui/button"
 import Cookies from "js-cookie"
 import { toast } from "sonner"
 
-// Perluas interface agar menyertakan data informasi pembagian grup
 interface DocumentItem {
   id: string | number
   name: string
@@ -31,8 +32,8 @@ interface DocumentItem {
   is_folder: boolean
   is_shared: boolean
   updated_at: string
-  share_with_all?: boolean   // Tambahan Properti Baru
-  group_names?: string[]     // Tambahan Nama-nama grup penerima share dari backend
+  share_with_all?: boolean
+  group_names?: string[]
 }
 
 interface ViewProps {
@@ -48,7 +49,7 @@ interface ViewProps {
   onToggleShare: (item: DocumentItem) => void
 }
 
-const BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1"
+const BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000/api/v1"
 
 const getFileConfig = (item: DocumentItem) => {
   if (item.is_folder) {
@@ -68,27 +69,26 @@ const getFileConfig = (item: DocumentItem) => {
   return { Icon: FileText, color: "text-blue-500" }
 }
 
-const handleViewFile = async (id: string | number , setSelectedIds: React.Dispatch<React.SetStateAction<Set<string | number>>>) => {
-  const toastId = toast.loading("Membuka file...")
+// Ubah fungsi trigger view file agar me-return Blob URL untuk kebutuhan state React
+const requestFileBlobUrl = async (id: string | number): Promise<{ url: string; mimeType: string } | null> => {
   try {
     const token = Cookies.get("access_token")
     const response = await fetch(`${BASE_URL}/documents/${id}/view`, {
       method: "GET",
       headers: { "Authorization": `Bearer ${token}` },
     })
-    if (!response.ok) throw new Error("Gagal memuat file")
+    if (!response.status) throw new Error("Gagal memuat dokumen")
+    
+    const mimeType = response.headers.get("content-type") || "application/octet-stream"
     const blob = await response.blob()
     const url = window.URL.createObjectURL(blob)
-    window.open(url, "_blank")
-    setTimeout(() => window.URL.revokeObjectURL(url), 1000)
-    toast.dismiss(toastId)
-    setSelectedIds(new Set())
+    return { url, mimeType }
   } catch (error) {
-    toast.error("Tidak dapat melihat file", { id: toastId })
+    return null
   }
 }
 
-// Komponen Reusable isi menu - Ditambahkan menu "Info" di posisi paling atas
+// Komponen Reusable isi menu
 const MenuItems = ({ 
   item, onRename, onDownload, onDelete, onToggleShare, onInfoClick 
 }: { 
@@ -97,7 +97,7 @@ const MenuItems = ({
   onDownload: (item: DocumentItem) => void; 
   onDelete: (item: DocumentItem) => void; 
   onToggleShare: (item: DocumentItem) => void;
-  onInfoClick: (item: DocumentItem) => void; // Aksi baru untuk Info
+  onInfoClick: (item: DocumentItem) => void;
 }) => (
   <>
     <ContextMenuItem onClick={() => onInfoClick(item)} className="cursor-pointer font-medium text-blue-600 focus:text-blue-700 focus:bg-blue-50">
@@ -137,13 +137,11 @@ function InfoDialog({ item, isOpen, onClose, formatSize }: { item: DocumentItem 
         </DialogHeader>
         
         <div className="space-y-4 py-2">
-          {/* Pratinjau Icon Besar */}
           <div className="flex flex-col items-center justify-center p-4 bg-gray-50 rounded-xl border border-dashed">
             <Icon className={`w-14 h-14 ${color} mb-2`} />
             <span className="text-sm font-semibold text-gray-800 text-center max-w-[320px] break-all">{item.name}</span>
           </div>
 
-          {/* Rincian Atribut Dokumen */}
           <div className="space-y-2.5 text-sm">
             <div className="flex items-center justify-between border-b pb-2">
               <span className="text-muted-foreground flex items-center gap-1.5"><HardDrive className="w-4 h-4" /> Ukuran</span>
@@ -155,7 +153,6 @@ function InfoDialog({ item, isOpen, onClose, formatSize }: { item: DocumentItem 
               <span className="font-medium text-gray-900">{new Date(item.updated_at).toLocaleString("id-ID", { dateStyle: "medium", timeStyle: "short" })}</span>
             </div>
 
-            {/* Status Akses Berbagi / Share To Who */}
             <div className="flex flex-col gap-1.5 pt-1">
               <span className="text-muted-foreground flex items-center gap-1.5"><Share2 className="w-4 h-4" /> Status Akses Publik</span>
               <div className="p-3 rounded-lg bg-gray-50 border text-xs">
@@ -196,9 +193,77 @@ function InfoDialog({ item, isOpen, onClose, formatSize }: { item: DocumentItem 
   )
 }
 
+// --- NEW COMPONENT: MODAL PREVIEW DOCVIEWER ---
+interface FileViewerDialogProps {
+  viewingFile: { uri: string; fileName: string; fileType: string } | null
+  onClose: () => void
+}
+
+function FileViewerDialog({ viewingFile, onClose }: FileViewerDialogProps) {
+  if (!viewingFile) return null
+
+  const docs = [{ uri: viewingFile.uri, fileName: viewingFile.fileName, fileType: viewingFile.fileType }]
+
+  return (
+    <Dialog open={!!viewingFile} onOpenChange={(open) => !open && onClose()}>
+      {/* max-w-5xl memberikan area pandang prapanduan yang sangat luas dan nyaman */}
+      <DialogContent className="sm:max-w-5xl h-[85vh] flex flex-col p-0 overflow-hidden" onClick={(e) => e.stopPropagation()}>
+        <DialogHeader className="px-6 pt-4 pb-2 border-b">
+          <DialogTitle className="text-gray-900 flex items-center gap-2 truncate pr-6">
+            <FileText className="w-5 h-5 text-blue-600 shrink-0" />
+            <span className="truncate">Pratinjau Dokumen: {viewingFile.fileName}</span>
+          </DialogTitle>
+        </DialogHeader>
+
+        {/* Kontainer Utama Renderer DocViewer */}
+        <div className="flex-1 bg-gray-100 overflow-y-auto">
+          <DocViewer 
+            documents={docs} 
+            pluginRenderers={DocViewerRenderers}
+            config={{
+              header: {
+                disableHeader: true, // Matikan header bawaan agar menyatu dengan UI Dialog Shadcn
+                disableFileName: true,
+              }
+            }}
+            theme={{
+              disableThemeScrollbar: true,
+            }}
+            className="h-full rounded-b-xl"
+          />
+        </div>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
 // --- GRID VIEW COMPONENT ---
 export function GridView({ documents, onFolderClick, formatSize, onDelete, onRename, onDownload, selectedIds, setSelectedIds, onSelect, onToggleShare }: ViewProps) {
   const [infoItem, setInfoItem] = useState<DocumentItem | null>(null)
+  const [viewingFile, setViewingFile] = useState<{ uri: string; fileName: string; fileType: string } | null>(null)
+
+  const handleOpenViewer = async (item: DocumentItem) => {
+    const toastId = toast.loading("Membuka berkas...")
+    const res = await requestFileBlobUrl(item.id)
+    if (res) {
+      toast.dismiss(toastId)
+      setSelectedIds(new Set())
+      setViewingFile({
+        uri: res.url,
+        fileName: item.name,
+        fileType: String(item.file_type || item.name.split('.').pop())
+      })
+    } else {
+      toast.error("Gagal memuat pratinjau dokumen", { id: toastId })
+    }
+  }
+
+  const handleCloseViewer = () => {
+    if (viewingFile?.uri) {
+      window.URL.revokeObjectURL(viewingFile.uri) // Hapus memori blob setelah ditutup
+    }
+    setViewingFile(null)
+  }
 
   return (
     <>
@@ -218,7 +283,7 @@ export function GridView({ documents, onFolderClick, formatSize, onDelete, onRen
                   }}
                   onDoubleClick={(e) => {
                     e.stopPropagation()
-                    item.is_folder ? onFolderClick(item) : handleViewFile(item.id, setSelectedIds)
+                    item.is_folder ? onFolderClick(item) : handleOpenViewer(item)
                   }}
                   className={`group relative select-none flex flex-col border rounded-xl p-3 transition-all cursor-pointer shadow-sm
                     ${isSelected ? "bg-blue-50 border-blue-500 ring-1 ring-blue-500" : "bg-white hover:border-blue-300"}`}
@@ -249,7 +314,7 @@ export function GridView({ documents, onFolderClick, formatSize, onDelete, onRen
                 <MenuItems 
                   item={item} onRename={onRename} onDownload={onDownload} 
                   onDelete={onDelete} onToggleShare={onToggleShare}
-                  onInfoClick={(doc) => setInfoItem(doc)} // Trigger modal info
+                  onInfoClick={(doc) => setInfoItem(doc)}
                 />
               </ContextMenuContent>
             </ContextMenu>
@@ -258,6 +323,7 @@ export function GridView({ documents, onFolderClick, formatSize, onDelete, onRen
       </div>
       
       <InfoDialog item={infoItem} isOpen={!!infoItem} onClose={() => setInfoItem(null)} formatSize={formatSize} />
+      <FileViewerDialog viewingFile={viewingFile} onClose={handleCloseViewer} />
     </>
   )
 }
@@ -265,6 +331,31 @@ export function GridView({ documents, onFolderClick, formatSize, onDelete, onRen
 // --- LIST VIEW COMPONENT ---
 export function ListView({ documents, onFolderClick, formatSize, onDelete, onRename, onDownload, selectedIds, setSelectedIds, onSelect, onToggleShare }: ViewProps) {
   const [infoItem, setInfoItem] = useState<DocumentItem | null>(null)
+  const [viewingFile, setViewingFile] = useState<{ uri: string; fileName: string; fileType: string } | null>(null)
+
+  const handleOpenViewer = async (item: DocumentItem) => {
+    const toastId = toast.loading("Membuka berkas...")
+    const res = await requestFileBlobUrl(item.id)
+    if (res) {
+      console.log(res.url)
+      toast.dismiss(toastId)
+      setSelectedIds(new Set())
+      setViewingFile({
+        uri: res.url,
+        fileName: item.name,
+        fileType: String(item.file_type || item.name.split('.').pop())
+      })
+    } else {
+      toast.error("Gagal memuat pratinjau dokumen", { id: toastId })
+    }
+  }
+
+  const handleCloseViewer = () => {
+    if (viewingFile?.uri) {
+      window.URL.revokeObjectURL(viewingFile.uri)
+    }
+    setViewingFile(null)
+  }
 
   return (
     <>
@@ -292,7 +383,7 @@ export function ListView({ documents, onFolderClick, formatSize, onDelete, onRen
                       onClick={(e) => onSelect(item.id, e.ctrlKey || e.metaKey)}
                       onDoubleClick={(e) => {
                         e.stopPropagation()
-                        item.is_folder ? onFolderClick(item) : handleViewFile(item.id, setSelectedIds)
+                        item.is_folder ? onFolderClick(item) : handleOpenViewer(item)
                       }}
                       className={`border-b last:border-0 transition-colors group cursor-pointer
                         ${isSelected ? "bg-blue-50" : "hover:bg-blue-50/30"}`}
@@ -331,7 +422,7 @@ export function ListView({ documents, onFolderClick, formatSize, onDelete, onRen
                     <MenuItems 
                       item={item} onRename={onRename} onDownload={onDownload} 
                       onDelete={onDelete} onToggleShare={onToggleShare} 
-                      onInfoClick={(doc) => setInfoItem(doc)} // Trigger modal info
+                      onInfoClick={(doc) => setInfoItem(doc)}
                     />
                   </ContextMenuContent>
                 </ContextMenu>
@@ -342,6 +433,7 @@ export function ListView({ documents, onFolderClick, formatSize, onDelete, onRen
       </div>
 
       <InfoDialog item={infoItem} isOpen={!!infoItem} onClose={() => setInfoItem(null)} formatSize={formatSize} />
+      <FileViewerDialog viewingFile={viewingFile} onClose={handleCloseViewer} />
     </>
   )
 }

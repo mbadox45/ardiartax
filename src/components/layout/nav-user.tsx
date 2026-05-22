@@ -2,6 +2,7 @@
 "use client"
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation" // Import router untuk redirect
+import Link from "next/link";
 import Cookies from "js-cookie"
 
 import {
@@ -86,7 +87,7 @@ export function NavUser({
               </Avatar>
               <div className="grid flex-1 text-left text-sm leading-tight">
                 <span className="truncate font-medium">{user.name}</span>
-                <span className="truncate text-xs text-white/60">
+                <span className="truncate text-xs">
                   {user.email}
                 </span>
               </div>
@@ -124,9 +125,11 @@ export function NavUser({
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
             <DropdownMenuGroup>
-              <DropdownMenuItem>
-                <KeyRound />
-                Change Password
+              <DropdownMenuItem asChild>
+                <Link href="/admin/change-password" className="flex w-full items-center gap-2">
+                  <KeyRound className="h-4 w-4" />
+                  <span>Change Password</span>
+                </Link>
               </DropdownMenuItem>
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
