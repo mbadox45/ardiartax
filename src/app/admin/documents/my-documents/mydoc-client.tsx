@@ -50,6 +50,7 @@ import { storageService } from "@/lib/api/storage.service"
 import { DeleteConfirmDialog } from "./delete-confirm-dialog"
 import { encryptData, decryptData } from "@/lib/crypto"
 import { groupService } from "@/lib/api/group.service"
+import { userService } from "@/lib/api/user.service"
 
 interface DocumentItem {
     id: string | number
@@ -67,14 +68,21 @@ interface PathItem {
     is_shared?: boolean // Tambahkan properti ini
 }
 
+// Tambahkan interface ini di bagian atas jika belum ada
+interface UserItem {
+    id: number
+    name: string
+    email: string
+}
+
 export default function MyDocClient() {
     const router = useRouter()
     const searchParams = useSearchParams()
     
     const [selectedIds, setSelectedIds] = useState<Set<string | number>>(new Set())
     const [isShareDialogOpen, setIsShareDialogOpen] = useState(false);
-    const [shareDocIds, setShareDocIds] = useState<number[]>([]);
     const [groups, setGroups] = useState<{ id: number; name: string; parent_id?: number | null; level?: number }[]>([]);
+    const [users, setUsers] = useState<UserItem[]>([]);
     
     // --- STATE INITIALIZATION ---
     // Gunakan nilai default Root agar server & client render awal sama (cegah hydration error)
@@ -179,6 +187,21 @@ export default function MyDocClient() {
             }
         }
     }, [])
+
+    useEffect(() => {
+        const fetchMasterData = async () => {
+            try {
+                // Panggil API untuk mengambil data user terdaftar
+                // Sesuaikan userService/authService dengan nama service yang Anda gunakan di project Anda
+                const response = await userService.getAll(); 
+                setUsers(response || []);
+            } catch (error) {
+                console.error("Gagal memuat data master pengguna:", error);
+            }
+        };
+
+        fetchMasterData();
+    }, []);
 
     const syncUrl = useCallback((newPath: PathItem[]) => {
         const lastId = newPath[newPath.length - 1].id
@@ -409,7 +432,12 @@ export default function MyDocClient() {
 
     const handleBulkMove = async (
         targetId: string | number, 
-        targetFolder: { is_shared?: boolean; share_with_all?: boolean; group_ids?: number[] } | null | undefined
+        targetFolder: { 
+            is_shared?: boolean; 
+            share_with_all?: boolean; 
+            group_ids?: number[]; 
+            members?: { id: number; access_level: "viewer" | "editor" }[] // 👈 1. Tambahkan tipe data members di sini
+        } | null | undefined
     ) => {
         const idsArray = Array.from(selectedIds).map(Number); // Pastikan ID bertipe number[]
         const toastId = toast.loading(`Memindahkan ${idsArray.length} item...`);
@@ -427,13 +455,17 @@ export default function MyDocClient() {
                 const targetIsShared = !!targetFolder.is_shared;
                 const targetShareWithAll = !!targetFolder.share_with_all;
                 const targetGroupIds = Array.isArray(targetFolder.group_ids) ? targetFolder.group_ids : [];
+                
+                // 👈 2. Ambil properti members secara aman, jika undefined/bukan array beri fallback array kosong []
+                const targetMembers = Array.isArray(targetFolder.members) ? targetFolder.members : [];
 
-                // 3. Eksekusi penyelarasan hak akses (Inherit Full Access)
+                // 3. Eksekusi penyelarasan hak akses (Inherit Full Access dari Folder Tujuan)
                 await documentService.bulkShareDocuments({
                     document_ids: idsArray,
                     is_shared: targetIsShared,
                     share_with_all: targetShareWithAll,
-                    group_ids: targetGroupIds
+                    group_ids: targetGroupIds,
+                    members: targetMembers // 👈 3. Teruskan data members hasil warisan folder tujuan ke sini
                 });
                 
                 toast.success(`Berhasil dipindahkan & hak akses diselaraskan dengan folder tujuan`, { id: toastId });
@@ -453,7 +485,11 @@ export default function MyDocClient() {
     };
 
     // Jalankan fungsi ini ketika user menekan tombol "Simpan & Bagikan" di dalam Modal Dialog
-    const handleBulkShare = async (shareScope: "all" | "specific", selectedGroupIds: number[]) => {
+    const handleBulkShare = async (
+        shareScope: "all" | "specific", 
+        selectedGroupIds: number[], 
+        selectedMembers: { id: number; access_level: "viewer" | "editor" }[]
+    ) => {
         const idsArray = Array.from(selectedIds).map(Number); // Pastikan bertipe number[]
         
         const toastId = toast.loading(`Membagikan ${idsArray.length} item...`);
@@ -465,7 +501,8 @@ export default function MyDocClient() {
                 document_ids: idsArray,
                 is_shared: true,
                 share_with_all: shareScope === "all",
-                group_ids: shareScope === "all" ? [] : selectedGroupIds
+                group_ids: shareScope === "all" ? [] : selectedGroupIds, // Array murni [1, 2, 3]
+                members: shareScope === "all" ? [] : selectedMembers     // Array objek [{id, access_level}] 👈 TAMBAHKAN INI
             });
 
             toast.success(`Berhasil membagikan ${idsArray.length} item`, { 
@@ -500,7 +537,8 @@ export default function MyDocClient() {
                     document_ids: [Number(item.id)], // Pastikan ID dikonversi menjadi number jika diperlukan
                     is_shared: false,                 // Mencabut status berbagi
                     share_with_all: false,            // Menonaktifkan flag share ke semua grup
-                    group_ids: []                     // Mengosongkan relasi grup divisi
+                    group_ids: [],                     // Mengosongkan relasi grup divisi
+                    members: []                        // Mengosongkan relasi anggota
                 });
 
                 toast.success("Akses berbagi dicabut", { id: toastId });
@@ -797,10 +835,12 @@ export default function MyDocClient() {
                 open={isShareDialogOpen}
                 onOpenChange={setIsShareDialogOpen}
                 selectedDocumentIds={Array.from(selectedIds).map(Number)}
-                groups={groups || []} // Pastikan selalu mengirim array, meskipun kosong
-                // Trigger fungsi handleBulkShare di atas dengan mengirimkan data dari dalam modal
-                onSave={(scope, groupIds) => handleBulkShare(scope, groupIds)} 
-                isSubmitting={isSharing} // Supaya tombol di modal ikut loading saat API di halaman utama berjalan
+                groups={groups || []} 
+                users={users || []} // 👈 1. Pastikan data list users dilempar ke dalam modal
+                
+                // 👈 2. Ubah baris ini agar meneruskan 3 parameter lengkap ke handleBulkShare
+                onSave={(scope, groupIds, selectedMembers) => handleBulkShare(scope, groupIds, selectedMembers)} 
+                isSubmitting={isSharing} 
             />
         </div>
     )

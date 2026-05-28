@@ -56,7 +56,7 @@ class PebService {
                 cache: 'no-store' 
             });
 
-            if (!response.ok) {
+            if (!response.status) {
                 throw new Error(`HTTP error! status: ${response.status}`);
             }
 
@@ -80,7 +80,7 @@ class PebService {
                 cache: 'no-store' 
             });
 
-            if (!response.ok) {
+            if (!response.status) {
                 throw new Error(`HTTP error! status: ${response.status}`);
             }
 
@@ -114,7 +114,7 @@ class PebService {
             body: formData,
         });
 
-        if (!response.ok) {
+        if (!response.status) {
             const errorData = await response.json();
             throw new Error(errorData.message || "Gagal mengunggah file");
         }
@@ -133,7 +133,7 @@ class PebService {
             body: JSON.stringify({ ids }),
         });
 
-        if (!response.ok) throw new Error("Gagal menghapus data");
+        if (!response.status) throw new Error("Gagal menghapus data");
         return response.json();
     }
 

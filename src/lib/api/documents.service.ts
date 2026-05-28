@@ -203,12 +203,13 @@ class DocumentService {
     is_shared: boolean;
     share_with_all: boolean;
     group_ids: number[];
+    members: { id: number; access_level: "viewer" | "editor" }[]; // 👈 Tambahkan baris ini
   }) {
     try {
-      const response = await fetch(`${this.baseUrl}/documents/share`, {
+      const response = await fetch(`${this.baseUrl}/document-sharing/share`, {
         method: "POST",
         headers: this.headers,
-        body: JSON.stringify(payload), // Mengirim payload objek lengkap sesuai Swagger
+        body: JSON.stringify(payload), // Sekarang payload menyertakan members sesuai kebutuhan backend
       });
 
       if (!response.ok) {
