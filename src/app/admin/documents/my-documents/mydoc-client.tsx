@@ -836,10 +836,7 @@ export default function MyDocClient() {
                 onOpenChange={setIsShareDialogOpen}
                 selectedDocumentIds={Array.from(selectedIds).map(Number)}
                 groups={groups || []} 
-                users={users || []} // 👈 1. Pastikan data list users dilempar ke dalam modal
-                
-                // 👈 2. Ubah baris ini agar meneruskan 3 parameter lengkap ke handleBulkShare
-                onSave={(scope, groupIds, selectedMembers) => handleBulkShare(scope, groupIds, selectedMembers)} 
+                onSave={(scope, selectedGroups) => handleBulkShare(scope, selectedGroups)} // Melempar array objek grup
                 isSubmitting={isSharing} 
             />
         </div>
