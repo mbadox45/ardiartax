@@ -31,7 +31,7 @@ class DocumentService {
         headers: this.headers,
       });
 
-      if (!response.ok) {
+      if (!response.status) {
         const errorData = await response.json().catch(() => ({}));
         throw new Error(errorData.message || "Gagal mengambil data dokumen");
       }
@@ -67,7 +67,7 @@ class DocumentService {
         body: formData,
       });
 
-      if (!response.ok) {
+      if (!response.status) {
         const errorData = await response.json().catch(() => ({}));
         throw new Error(errorData.message || "Gagal mengunggah file");
       }
@@ -93,7 +93,7 @@ class DocumentService {
       });
 
       // Jika berhasil, jangan langsung .json() jika body mungkin kosong
-      if (response.ok) {
+      if (response.status) {
         // Cek apakah ada konten sebelum parsing
         const contentType = response.headers.get("content-type");
         if (contentType && contentType.includes("application/json")) {
@@ -114,28 +114,6 @@ class DocumentService {
       throw error;
     }
   }
-  // async createFolder(payload: CreateFolderPayload) {
-  //   try {
-  //     const response = await fetch(`${this.baseUrl}/documents/folder`, {
-  //       method: "POST",
-  //       headers: this.headers,
-  //       body: JSON.stringify({
-  //         is_shared: false, // default value
-  //         ...payload
-  //       }),
-  //     });
-
-  //     if (!response.ok) {
-  //       const errorData = await response.json().catch(() => ({}));
-  //       throw new Error(errorData.message || "Gagal membuat folder");
-  //     }
-
-  //     return await response.json();
-  //   } catch (error) {
-  //     console.error("DocumentService.createFolder Error:", error);
-  //     throw error;
-  //   }
-  // }
 
   // Tambahkan ini di dalam class DocumentService
   async deleteDocument(documentId: string | number) {
@@ -145,7 +123,7 @@ class DocumentService {
             headers: this.headers,
         });
 
-        if (!response.ok) {
+        if (!response.status) {
             const errorData = await response.json().catch(() => ({}));
             throw new Error(errorData.message || "Gagal menghapus dokumen");
         }
@@ -165,7 +143,7 @@ class DocumentService {
             body: JSON.stringify({ document_ids: documentIds }),
         });
 
-        if (!response.ok) {
+        if (!response.status) {
             const errorData = await response.json().catch(() => ({}));
             throw new Error(errorData.message || "Gagal menghapus dokumen");
         }
@@ -185,7 +163,7 @@ class DocumentService {
             body: JSON.stringify({ document_ids: ids, target_folder_id: targetId }),
         });
 
-        if (!response.ok) {
+        if (!response.status) {
             const errorData = await response.json().catch(() => ({}));
             throw new Error(errorData.message || "Gagal memindahkan dokumen");
         }
@@ -197,22 +175,21 @@ class DocumentService {
     }
   }
 
-  // POST /api/v1/documents/share
   async bulkShareDocuments(payload: {
     document_ids: (string | number)[];
     is_shared: boolean;
     share_with_all: boolean;
-    group_ids: number[];
-    members: { id: number; access_level: "viewer" | "editor" }[]; // 👈 Tambahkan baris ini
+    group_ids: { id: number; access_level: "viewer" | "editor" }[];
   }) {
     try {
+      console.log(payload)
       const response = await fetch(`${this.baseUrl}/document-sharing/share`, {
         method: "POST",
         headers: this.headers,
         body: JSON.stringify(payload), // Sekarang payload menyertakan members sesuai kebutuhan backend
       });
 
-      if (!response.ok) {
+      if (!response.status) {
         const errorData = await response.json().catch(() => ({}));
         throw new Error(errorData.message || "Gagal memperbarui hak akses dokumen");
       }

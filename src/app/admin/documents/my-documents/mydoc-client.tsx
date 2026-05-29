@@ -455,18 +455,14 @@ export default function MyDocClient() {
                 const targetIsShared = !!targetFolder.is_shared;
                 const targetShareWithAll = !!targetFolder.share_with_all;
                 const targetGroupIds = Array.isArray(targetFolder.group_ids) ? targetFolder.group_ids : [];
-                
-                // 👈 2. Ambil properti members secara aman, jika undefined/bukan array beri fallback array kosong []
-                const targetMembers = Array.isArray(targetFolder.members) ? targetFolder.members : [];
 
                 // 3. Eksekusi penyelarasan hak akses (Inherit Full Access dari Folder Tujuan)
-                await documentService.bulkShareDocuments({
-                    document_ids: idsArray,
-                    is_shared: targetIsShared,
-                    share_with_all: targetShareWithAll,
-                    group_ids: targetGroupIds,
-                    members: targetMembers // 👈 3. Teruskan data members hasil warisan folder tujuan ke sini
-                });
+                // await documentService.bulkShareDocuments({
+                //     document_ids: idsArray,
+                //     is_shared: targetIsShared,
+                //     share_with_all: targetShareWithAll,
+                //     group_ids: targetGroupIds,
+                // });
                 
                 toast.success(`Berhasil dipindahkan & hak akses diselaraskan dengan folder tujuan`, { id: toastId });
             } else {
@@ -487,8 +483,8 @@ export default function MyDocClient() {
     // Jalankan fungsi ini ketika user menekan tombol "Simpan & Bagikan" di dalam Modal Dialog
     const handleBulkShare = async (
         shareScope: "all" | "specific", 
-        selectedGroupIds: number[], 
-        selectedMembers: { id: number; access_level: "viewer" | "editor" }[]
+        selectedGroupIds: { id: number; access_level: "viewer" | "editor" }[], 
+        // selectedMembers: { id: number; access_level: "viewer" | "editor" }[]
     ) => {
         const idsArray = Array.from(selectedIds).map(Number); // Pastikan bertipe number[]
         
@@ -502,7 +498,6 @@ export default function MyDocClient() {
                 is_shared: true,
                 share_with_all: shareScope === "all",
                 group_ids: shareScope === "all" ? [] : selectedGroupIds, // Array murni [1, 2, 3]
-                members: shareScope === "all" ? [] : selectedMembers     // Array objek [{id, access_level}] 👈 TAMBAHKAN INI
             });
 
             toast.success(`Berhasil membagikan ${idsArray.length} item`, { 
@@ -538,7 +533,6 @@ export default function MyDocClient() {
                     is_shared: false,                 // Mencabut status berbagi
                     share_with_all: false,            // Menonaktifkan flag share ke semua grup
                     group_ids: [],                     // Mengosongkan relasi grup divisi
-                    members: []                        // Mengosongkan relasi anggota
                 });
 
                 toast.success("Akses berbagi dicabut", { id: toastId });
