@@ -30,7 +30,7 @@ import { NavDocuments } from "@/components/layout/nav-documents"
 import { NavMain } from "@/components/layout/nav-main"
 import { NavSecondary } from "@/components/layout/nav-secondary"
 import { NavUser } from "@/components/layout/nav-user"
-import { menuForSuperAdmin, menuForAdmin, menuForUser} from "@/lib/controllers/menu.controller"
+import { menuForSuperAdmin, menuForAdmin, menuForUser, menuForUserTax} from "@/lib/controllers/menu.controller"
 import {
   Sidebar,
   SidebarContent,
@@ -57,7 +57,7 @@ interface AppSidebarProps extends React.ComponentProps<typeof Sidebar> {
 }
 
 export function  AppSidebar({ user, ...props }: AppSidebarProps) {
-  const menuItems = user.role === "super_admin" ? menuForSuperAdmin : user.role === "admin" ? menuForAdmin : menuForUser
+  const menuItems = user.role === "super_admin" ? menuForSuperAdmin : user.role === "admin" ? menuForAdmin : user.role === "user_tax" ? menuForUserTax : menuForUser
   const data = {
     user: {
       name: "Guest",

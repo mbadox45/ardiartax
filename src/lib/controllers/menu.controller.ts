@@ -153,7 +153,7 @@ export const menuForAdmin: MenuItem[] = [
     },
 ]
 
-export const menuForUser: MenuItem[] = [
+export const menuForUserTax: MenuItem[] = [
     {
         title: "Dashboard",
         url: "/admin",
@@ -180,6 +180,34 @@ export const menuForUser: MenuItem[] = [
         title: "Goods Export",
         url: "/admin/peb",
         icon: Ship,
+    },
+    {
+        title: "Documents",
+        url: "#",
+        icon: Folder,
+        items: [
+            {
+                title: "My Documents",
+                url: "/admin/documents/my-documents",
+            },
+            {
+                title: "Document Sharing",
+                url: "/admin/documents/sharing",
+            },
+        ],
+    },
+]
+
+export const menuForUser: MenuItem[] = [
+    {
+        title: "Dashboard",
+        url: "/admin",
+        icon: LayoutDashboard,
+    },
+    {
+        title: "Task Board",
+        icon: ListTodo,
+        url: "/admin/activities/task-board",
     },
     {
         title: "Documents",

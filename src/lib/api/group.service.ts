@@ -42,12 +42,13 @@ class GroupService {
 
   // POST /api/v1/groups/
   async create(data: { name: string; parent_id: number | null }) {
+    data.parent_id = data.parent_id === 0 ? null : data.parent_id
     const response = await fetch(`${this.baseUrl}/`, {
       method: 'POST',
       headers: this.getHeaders(),
       body: JSON.stringify(data),
     })
-    if (!response.ok) throw new Error("Gagal membuat grup")
+    if (!response.status) throw new Error("Gagal membuat grup")
     return response.json()
   }
 
@@ -58,7 +59,7 @@ class GroupService {
       headers: this.getHeaders(),
       body: JSON.stringify(data),
     })
-    if (!response.ok) throw new Error("Gagal memperbarui grup")
+    if (!response.status) throw new Error("Gagal memperbarui grup")
     return response.json()
   }
 
@@ -68,7 +69,7 @@ class GroupService {
       method: 'DELETE',
       headers: this.getHeaders(),
     })
-    if (!response.ok) throw new Error("Gagal menghapus grup")
+    if (!response.status) throw new Error("Gagal menghapus grup")
     return response.json()
   }
 }

@@ -125,11 +125,13 @@ export const columns: ColumnDef<UserData>[] = [
       
       if (role === "super_admin") {
         return <Badge className="bg-red-700 text-white shadow-none border-none text-xs font-medium">Super Admin</Badge>
-      }
-      if (role === "admin") {
+      } else if (role === "admin") {
         return <Badge className="bg-blue-700 text-white shadow-none border-none text-xs font-medium">Admin</Badge>
+      } else if (role === "user_tax") {
+        return <Badge className="bg-amber-500 text-white shadow-none border-none text-xs font-medium">User Tax</Badge>
+      } else {
+        return <Badge variant="secondary" className="shadow-none border-none text-xs font-medium">User</Badge>
       }
-      return <Badge variant="secondary" className="shadow-none border-none text-xs font-medium">User</Badge>
     },
   },
   {

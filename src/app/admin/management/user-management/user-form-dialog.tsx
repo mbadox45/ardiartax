@@ -144,6 +144,7 @@ export function UserFormDialog({ open, onOpenChange, mode, selectedUser, groups,
                 <SelectContent>
                   <SelectItem value="super_admin">Super Admin</SelectItem>
                   <SelectItem value="admin">Admin</SelectItem>
+                  <SelectItem value="user_tax">User Tax</SelectItem>
                   <SelectItem value="user">User</SelectItem>
                 </SelectContent>
               </Select>

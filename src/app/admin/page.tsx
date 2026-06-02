@@ -1,21 +1,16 @@
-// app/admin/page.tsx
+// src/app/admin/page.tsx
+import { cookies } from "next/headers"
+import DashboardLayout from "./DashboardLayout"
 
-import { ChartAreaInteractive } from "@/components/layout/chart-area-interactive"
-import { DataTable } from "@/components/layout/data-table"
-import { SectionCards } from "@/components/layout/section-cards"
+export default async function Page() {
+  // Membaca cookie langsung di server
+  const cookieStore = await cookies()
+  const roleCookie = cookieStore.get("role")?.value || "user"
+  
+  // Standarisasi nilai role sebelum dikirim ke Client Component
+  const initialRole = (roleCookie === "super_admin" || roleCookie === "superadmin") 
+    ? "superadmin" 
+    : "user"
 
-import data from "./data.json"
-
-export default function Page() {
-  return (
-    <>
-      <SectionCards />
-
-      <div className="px-4 lg:px-6">
-        <ChartAreaInteractive />
-      </div>
-
-      <DataTable data={data} />
-    </>
-  )
+  return <DashboardLayout initialRole={initialRole} />
 }

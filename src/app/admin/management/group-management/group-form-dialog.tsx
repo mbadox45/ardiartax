@@ -28,8 +28,8 @@ export function GroupFormDialog({ open, onOpenChange, mode, selectedGroup, allGr
 
     useEffect(() => {
         if (mode === "update" && selectedGroup) {
-            setName(selectedGroup.name)
-            setParentId(selectedGroup.parent_id?.toString() || "0")
+            setName(selectedGroup.name?.toString() || "")
+            setParentId(selectedGroup.parent_id?.toString() || null)
             setIsActive(selectedGroup.is_active)
         } else {
             setName("")
@@ -44,7 +44,7 @@ export function GroupFormDialog({ open, onOpenChange, mode, selectedGroup, allGr
         try {
             const payload = mode === "create" 
                 ? { name, parent_id: Number(parentId) }
-                : { name, is_active: isActive, parent_id: Number(parentId), id: selectedGroup?.id }
+                : { name, is_active: isActive, parent_id: Number(parentId) == 0 ? null : Number(parentId), id: selectedGroup?.id }
             
             await onSubmit(payload)
             onOpenChange(false)

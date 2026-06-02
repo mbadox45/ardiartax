@@ -50,7 +50,6 @@ import { storageService } from "@/lib/api/storage.service"
 import { DeleteConfirmDialog } from "./delete-confirm-dialog"
 import { encryptData, decryptData } from "@/lib/crypto"
 import { groupService } from "@/lib/api/group.service"
-import { userService } from "@/lib/api/user.service"
 
 interface DocumentItem {
     id: string | number
@@ -82,7 +81,6 @@ export default function MyDocClient() {
     const [selectedIds, setSelectedIds] = useState<Set<string | number>>(new Set())
     const [isShareDialogOpen, setIsShareDialogOpen] = useState(false);
     const [groups, setGroups] = useState<{ id: number; name: string; parent_id?: number | null; level?: number }[]>([]);
-    const [users, setUsers] = useState<UserItem[]>([]);
     
     // --- STATE INITIALIZATION ---
     // Gunakan nilai default Root agar server & client render awal sama (cegah hydration error)
@@ -187,21 +185,6 @@ export default function MyDocClient() {
             }
         }
     }, [])
-
-    useEffect(() => {
-        const fetchMasterData = async () => {
-            try {
-                // Panggil API untuk mengambil data user terdaftar
-                // Sesuaikan userService/authService dengan nama service yang Anda gunakan di project Anda
-                const response = await userService.getAll(); 
-                setUsers(response || []);
-            } catch (error) {
-                console.error("Gagal memuat data master pengguna:", error);
-            }
-        };
-
-        fetchMasterData();
-    }, []);
 
     const syncUrl = useCallback((newPath: PathItem[]) => {
         const lastId = newPath[newPath.length - 1].id
@@ -443,32 +426,11 @@ export default function MyDocClient() {
         const toastId = toast.loading(`Memindahkan ${idsArray.length} item...`);
         setIsMoving(true);
 
-        console.log("Memindahkan item:", idsArray, "ke folder:", targetId);
         try {
             // 1. Jalankan proses pemindahan berkas ke folder tujuan
-            await documentService.bulkMoveDocuments(idsArray, targetId);
+            const result = await documentService.bulkMoveDocuments(idsArray, targetId);
             
-            // 2. Periksa apakah targetId bukan Root (0) dan targetFolder valid
-            if (targetId !== 0 && targetFolder) {
-                
-                // Ambil properti hak akses dari folder tujuan secara defensif dengan fallback nilai default
-                const targetIsShared = !!targetFolder.is_shared;
-                const targetShareWithAll = !!targetFolder.share_with_all;
-                const targetGroupIds = Array.isArray(targetFolder.group_ids) ? targetFolder.group_ids : [];
-
-                // 3. Eksekusi penyelarasan hak akses (Inherit Full Access dari Folder Tujuan)
-                // await documentService.bulkShareDocuments({
-                //     document_ids: idsArray,
-                //     is_shared: targetIsShared,
-                //     share_with_all: targetShareWithAll,
-                //     group_ids: targetGroupIds,
-                // });
-                
-                toast.success(`Berhasil dipindahkan & hak akses diselaraskan dengan folder tujuan`, { id: toastId });
-            } else {
-                // Jika dipindahkan kembali ke Root, biarkan status akses dokumen apa adanya
-                toast.success(`Berhasil dipindahkan ke Root (Status akses tetap)`, { id: toastId });
-            }
+            toast.success(`${result.message}`, { id: toastId, position: "top-center" });
             
             setIsMoveDialogOpen(false);
             setSelectedIds(new Set());
