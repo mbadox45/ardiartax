@@ -285,26 +285,30 @@ export default function DocClient() {
   }
 
   // C. Aksi Ubah Nama Item (Rename File / Folder)
-  const handleRenameItem = async (item: DocumentItem, newName: string) => {
-    // 🔒 Proteksi Root & Otoritas Akses
+  const handleRenameItem = async (item: DocumentItem) => {
+    // 🔒 Proteksi tingkat Root & Otoritas Akses
     if (currentFolderId === 0) {
-      toast.error("Aksi Ditolak: Folder utama di tingkat Root tidak boleh diubah namanya.")
-      return
+      toast.error("Aksi Ditolak: Folder utama di tingkat Root tidak boleh diubah namanya.");
+      return;
     }
 
     if (item.access_level !== "editor") {
-      toast.error("Aksi Ditolak: Anda tidak memiliki otoritas Editor untuk mengubah nama item ini.")
-      return
+      toast.error("Aksi Ditolak: Anda tidak memiliki otoritas Editor untuk mengubah nama item ini.");
+      return;
     }
 
+    // Ambil input nama baru di level ini jika komponen tidak menyediakannya
+    const newName = prompt("Masukkan nama baru:", item.name);
+    if (!newName || newName.trim() === "" || newName === item.name) return;
+
     try {
-      await documentService.renameDocument(item.id, newName)
-      toast.success("Nama berhasil diperbarui")
-      fetchSharedData(currentFolderId)
+      await documentService.renameDocument(item.id, newName.trim());
+      toast.success("Nama berhasil diperbarui");
+      fetchSharedData(currentFolderId);
     } catch (error: unknown) {
-      toast.error(error instanceof Error ? error.message : "Gagal mengubah nama")
+      toast.error(error instanceof Error ? error.message : "Gagal mengubah nama");
     }
-  }
+  };
 
   // D. Aksi Pindah Item (Move File / Folder) - Terbatas hanya dalam ruang lingkup folder editor utama
   const handleMoveItem = async (item: DocumentItem, targetFolderId: string | number) => {
