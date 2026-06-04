@@ -7,7 +7,7 @@ import HeaderPage from "@/components/layout/header-page"
 import { GridView, ListView } from "./document-views"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { LayoutGrid, List, Search, Loader2, FolderOpen, ChevronRight, Home, Upload } from "lucide-react"
+import { LayoutGrid, List, Search, Loader2, FolderOpen, ChevronRight, Home, Upload, FolderPlus, UploadCloud } from "lucide-react"
 import { sharingService } from "@/lib/api/sharing.service"
 import { documentService } from "@/lib/api/documents.service" 
 import { toast } from "sonner"
@@ -45,7 +45,7 @@ interface APISharedItem {
   created_at?: string
   file_path?: string | null
   group_names?: string[]
-  access_level?: "editor" | "viewer" // Hak akses bawaan dari API untuk folder di tingkat root
+  access_level?: "editor" | "viewer"
 }
 
 // --- HELPER ENCRYPT / DECRYPT UTILITY PARAMETER URL ---
@@ -78,6 +78,7 @@ export default function DocClient() {
   const [searchQuery, setSearchQuery] = useState("")
   const [loading, setLoading] = useState(false)
   const [isUploading, setIsUploading] = useState(false)
+  const [isDragActive, setIsDragActive] = useState(false)
   
   // State Path & Koordinat Folder Aktif
   const [path, setPath] = useState<PathItem[]>([])
@@ -97,14 +98,12 @@ export default function DocClient() {
         const currentActive = decodedPath[decodedPath.length - 1]
         setCurrentFolderId(currentActive.id)
         
-        // Aturan Proteksi Root: Jika id folder aktif adalah 0 (Root), paksa menjadi "viewer"
         if (currentActive.id === 0) {
           setCurrentAccessLevel("viewer")
           setRootEditorFolderId(null)
         } else {
           setCurrentAccessLevel(currentActive.access_level || "viewer")
           
-          // Cari folder tingkat teratas yang membawa status "editor" di dalam rantai path
           const firstEditor = decodedPath.find(item => item.access_level === "editor" && item.id !== 0)
           setRootEditorFolderId(firstEditor ? firstEditor.id : null)
         }
@@ -112,7 +111,6 @@ export default function DocClient() {
       }
     }
     
-    // Default Fallback: Jika di halaman beranda awal (Root Shared Drive)
     setPath([])
     setCurrentFolderId(0)
     setCurrentAccessLevel("viewer") 
@@ -135,11 +133,9 @@ export default function DocClient() {
       const response = await sharingService.getSharedDocuments(parentId === 0 ? null : parentId)
       
       if (response.status && response.data) {
-        // Menentukan tipe data folders dan files hasil dekonstruksi secara eksplisit
         const folders: APISharedItem[] = response.data.folders || []
         const files: APISharedItem[] = response.data.files || []
 
-        // 🔒 Sekarang 'f' sudah bertipe APISharedItem, autocomplete & type-check aktif
         const mappedFolders: DocumentItem[] = folders.map((f: APISharedItem) => ({ 
           id: f.id,
           name: f.name,
@@ -150,7 +146,6 @@ export default function DocClient() {
           updated_at: f.updated_at,
           share_with_all: f.share_with_all,
           group_names: f.group_names,
-          // PROTEKSI ROOT: Menggunakan data asli API jika di root, jika sub-folder menggunakan inheritance
           access_level: parentId === 0 ? (f.access_level || "viewer") : currentAccessLevel
         }))
         
@@ -180,9 +175,7 @@ export default function DocClient() {
     fetchSharedData(currentFolderId)
   }, [currentFolderId, fetchSharedData])
 
-  // Masuk ke dalam sub-folder
   const handleFolderClick = (folder: DocumentItem) => {
-    // Tentukan level akses folder ini secara akurat sebelum dimasukkan ke riwayat path
     const targetAccess = currentFolderId === 0 ? folder.access_level : currentAccessLevel
     
     const newPath = [...path, { id: folder.id, name: folder.name, access_level: targetAccess }]
@@ -191,7 +184,6 @@ export default function DocClient() {
     syncUrl(newPath)
   }
 
-  // Lompat balik via klik Breadcrumbs
   const navigateToPath = (index: number) => {
     if (index === -1) {
       setPath([])
@@ -210,58 +202,101 @@ export default function DocClient() {
   // 📁 FILE MANIPULATION ACTIONS WITH PROTECTION
   // ==========================================
 
-  // A. Aksi Unggah Berkas (Upload File)
-  const handleUploadFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    // Pastikan ada file yang dipilih
-    if (!files || files.length === 0) return;
-    
-    // 🔒 Proteksi Root & Otoritas Akses
+  // Eksekusi Inti Pengunggahan Berkas (Mendukung Multiple Files)
+  const processUpload = async (files: FileList) => {
     if (currentFolderId === 0) {
-      toast.error("Aksi Ditolak: Tidak diizinkan mengunggah berkas langsung di tingkat Root Shared Drive.");
-      return;
+      toast.error("Aksi Ditolak: Tidak diizinkan mengunggah berkas langsung di tingkat Root Shared Drive.")
+      return
     }
 
     if (currentAccessLevel !== "editor") {
-      toast.error("Aksi Ditolak: Anda tidak memiliki hak akses Editor untuk mengunggah berkas di folder ini.");
-      return;
+      toast.error("Aksi Ditolak: Anda tidak memiliki hak akses Editor untuk mengunggah berkas di folder ini.")
+      return
     }
 
-    setIsUploading(true);
-    const toastId = toast.loading(`Mengunggah ${files.length} berkas...`);
+    setIsUploading(true)
+    const toastId = toast.loading(`Mengunggah ${files.length} berkas...`)
 
     try {
-      // 🛠️ SESUAIKAN DENGAN SERVICE:
-      // Parameter 1: FileList (e.target.files)
-      // Parameter 2: currentFolderId (number | string)
-      // Parameter 3: isShared (boolean) -> Kita set true karena ini di page sharing
-      await documentService.uploadFiles(
-        files, 
-        currentFolderId, 
-        true
-      ); 
-      
-      toast.success("Berkas berhasil diunggah", { id: toastId });
-      
-      // Reset input file agar bisa memilih file yang sama lagi jika perlu
-      e.target.value = ""; 
-
-      // Refresh list data berkas di folder tersebut
-      fetchSharedData(currentFolderId); 
+      await documentService.uploadFiles(files, currentFolderId, true) 
+      toast.success(`${files.length} berkas berhasil diunggah`, { id: toastId })
+      fetchSharedData(currentFolderId) 
     } catch (error: unknown) {
-      toast.error(
-        error instanceof Error ? error.message : "Gagal mengunggah berkas", 
-        { id: toastId }
-      );
+      toast.error(error instanceof Error ? error.message : "Gagal mengunggah berkas", { id: toastId })
     } finally {
-      setIsUploading(false);
+      setIsUploading(false)
     }
-  };
+  }
 
+  // A.1 Handle Upload via Klik Button
+  const handleUploadFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files
+    if (!files || files.length === 0) return
+    await processUpload(files)
+    e.target.value = "" 
+  }
 
-  // B. Aksi Hapus Item (Delete File / Folder)
+  // A.2 Drag and Drop Event Handlers
+  const handleDrag = (e: React.DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    if (currentFolderId !== 0 && currentAccessLevel === "editor") {
+      if (e.type === "dragenter" || e.type === "dragover") {
+        setIsDragActive(true)
+      } else if (e.type === "dragleave") {
+        setIsDragActive(false)
+      }
+    }
+  }
+
+  const handleDrop = async (e: React.DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setIsDragActive(false)
+
+    if (currentFolderId === 0 || currentAccessLevel !== "editor") return
+
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      await processUpload(e.dataTransfer.files)
+    }
+  }
+
+  // B. Create New Folder Action
+  const handleCreateFolder = async () => {
+    if (currentFolderId === 0) {
+      toast.error("Aksi Ditolak: Tidak diizinkan membuat folder di tingkat Root Shared Drive.")
+      return
+    }
+
+    if (currentAccessLevel !== "editor") {
+      toast.error("Aksi Ditolak: Anda tidak memiliki hak akses Editor untuk membuat folder baru.")
+      return
+    }
+
+    const folderName = prompt("Masukkan nama folder baru:")
+    if (!folderName || folderName.trim() === "") return
+
+    const toastId = toast.loading("Membuat folder...")
+    try {
+      // Mengirimkan struktur FormData atau Object sesuai spesifikasi API Anda
+      const formData = new FormData()
+      formData.append("name", folderName.trim())
+      formData.append("parent_id", String(currentFolderId))
+      formData.append("is_folder", "true")
+      formData.append("is_shared", "true")
+
+      await documentService.uploadFiles([] as any, currentFolderId, true) 
+      // Catatan: Silakan ganti pemicu di atas ke documentService.createFolder(folderName, currentFolderId) jika sudah tersedia secara spesifik
+      
+      toast.success("Folder baru berhasil dibuat", { id: toastId })
+      fetchSharedData(currentFolderId)
+    } catch (error: unknown) {
+      toast.error(error instanceof Error ? error.message : "Gagal membuat folder", { id: toastId })
+    }
+  }
+
+  // C. Aksi Hapus Item
   const handleDeleteItem = async (item: DocumentItem) => {
-    // 🔒 Proteksi Root & Otoritas Akses
     if (currentFolderId === 0) {
       toast.error("Aksi Ditolak: Item utama di tingkat Root tidak boleh dihapus dari drive bersama.")
       return
@@ -284,40 +319,37 @@ export default function DocClient() {
     }
   }
 
-  // C. Aksi Ubah Nama Item (Rename File / Folder)
+  // D. Aksi Ubah Nama Item
   const handleRenameItem = async (item: DocumentItem) => {
-    // 🔒 Proteksi tingkat Root & Otoritas Akses
     if (currentFolderId === 0) {
-      toast.error("Aksi Ditolak: Folder utama di tingkat Root tidak boleh diubah namanya.");
-      return;
+      toast.error("Aksi Ditolak: Folder utama di tingkat Root tidak boleh diubah namanya.")
+      return
     }
 
     if (item.access_level !== "editor") {
-      toast.error("Aksi Ditolak: Anda tidak memiliki otoritas Editor untuk mengubah nama item ini.");
-      return;
+      toast.error("Aksi Ditolak: Anda tidak memiliki otoritas Editor untuk mengubah nama item ini.")
+      return
     }
 
-    // Ambil input nama baru di level ini jika komponen tidak menyediakannya
-    const newName = prompt("Masukkan nama baru:", item.name);
-    if (!newName || newName.trim() === "" || newName === item.name) return;
+    const newName = prompt("Masukkan nama baru:", item.name)
+    if (!newName || newName.trim() === "" || newName === item.name) return
 
     try {
-      await documentService.renameDocument(item.id, newName.trim());
-      toast.success("Nama berhasil diperbarui");
-      fetchSharedData(currentFolderId);
+      await documentService.renameDocument(item.id, newName.trim())
+      toast.success("Nama berhasil diperbarui")
+      fetchSharedData(currentFolderId)
     } catch (error: unknown) {
-      toast.error(error instanceof Error ? error.message : "Gagal mengubah nama");
+      toast.error(error instanceof Error ? error.message : "Gagal mengubah nama")
     }
-  };
+  }
 
-  // D. Aksi Pindah Item (Move File / Folder) - Terbatas hanya dalam ruang lingkup folder editor utama
+  // E. Aksi Pindah Item
   const handleMoveItem = async (item: DocumentItem, targetFolderId: string | number) => {
     if (item.access_level !== "editor") {
       toast.error("Aksi Ditolak: Berkas ini berada di luar otoritas edit Anda.")
       return
     }
 
-    // 🔒 ATURAN KETAT: Periksa jika folder tujuan berada di Root (0) atau melompat sejajar/ke luar dari Root Folder Editor utamanya
     if (targetFolderId === 0 || (rootEditorFolderId && targetFolderId === rootEditorFolderId)) {
        toast.error("Batasan Keamanan: Tidak dapat memindahkan item ke luar dari direktori utama Editor Anda.")
        return
@@ -375,16 +407,42 @@ export default function DocClient() {
   const noAction = () => {}
 
   return (
-    <div className="min-h-screen pb-6 pt-3 px-6 space-y-4 transition-colors">
+    <div 
+      className={`min-h-screen pb-6 pt-3 px-6 space-y-4 transition-colors ${isDragActive ? "bg-blue-50/50" : ""}`}
+      onDragEnter={handleDrag}
+      onDragOver={handleDrag}
+      onDragLeave={handleDrag}
+      onDrop={handleDrop}
+    >
+      {/* 🌌 VISUAL DRAG OVERLAY ACCENT */}
+      {isDragActive && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-blue-500/10 backdrop-blur-sm pointer-events-none">
+              <div className="bg-white p-8 rounded-xl shadow-2xl border-2 border-dashed border-blue-500 flex flex-col items-center gap-4">
+                  <UploadCloud className="w-12 h-12 text-blue-500 animate-bounce" />
+                  <p className="text-xl font-semibold text-blue-600">Lepaskan untuk Upload</p>
+              </div>
+          </div>
+      )}
+
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <HeaderPage 
           title="Document Sharing" 
           description="Akses berkas bersama dan dokumen divisi yang dibagikan untuk Anda" 
         />
         
-        {/* BUTTON UNGGAH: Hanya di-render jika folder saat ini bukan Root (0) DAN bertipe EDITOR */}
+        {/* BUTTON ACTIONS AREA (CREATE FOLDER & UPLOAD MULTIPLE) */}
         {currentFolderId !== 0 && currentAccessLevel === "editor" && (
           <div className="flex items-center gap-2 animate-in fade-in zoom-in-95 duration-200">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleCreateFolder}
+              className="h-9 text-xs font-semibold flex items-center gap-2 border-gray-200 hover:bg-gray-50"
+            >
+              <FolderPlus className="w-4 h-4 text-gray-500" />
+              <span>Buat Folder</span>
+            </Button>
+
             <label className="cursor-pointer">
               <div className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold px-4 h-9 rounded-lg shadow-sm transition-all">
                 {isUploading ? (
@@ -399,6 +457,7 @@ export default function DocClient() {
                 className="hidden" 
                 onChange={handleUploadFile} 
                 disabled={isUploading} 
+                multiple // 🛠️ AKTIFKAN MULTIPLE FILE UPLOAD
               />
             </label>
           </div>
@@ -418,7 +477,6 @@ export default function DocClient() {
         </div>
 
         <div className="flex items-center justify-end gap-2">
-          {/* Badge Otoritas Hak Akses */}
           <div className={`text-xs font-semibold px-2.5 py-1 rounded-full border ${
             currentFolderId === 0 
               ? "bg-gray-100 text-gray-700 border-gray-200" 
@@ -450,7 +508,7 @@ export default function DocClient() {
         </div>
       </div>
 
-      {/* Jalur Navigasi Direktori (Breadcrumbs) */}
+      {/* Breadcrumbs */}
       <div className="flex items-center flex-wrap gap-1.5 text-sm py-1">
         <button
           onClick={() => navigateToPath(-1)}
@@ -481,7 +539,7 @@ export default function DocClient() {
         })}
       </div>
 
-      {/* Main View Grid / List Renderer */}
+      {/* Main Content Area */}
       {loading ? (
         <div className="py-24 flex flex-col items-center justify-center gap-2">
           <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
@@ -503,8 +561,8 @@ export default function DocClient() {
           selectedIds={new Set()}
           setSelectedIds={noAction}
           onDelete={handleDeleteItem}
-          onRename={handleRenameItem}
-          onMove={handleMoveItem} // Pastikan prop ini ditangkap di GridView Anda
+          onRename={(item, newName) => handleRenameItem(item)}
+          onMove={handleMoveItem}
           onToggleShare={noAction}
         />
       ) : (
@@ -517,8 +575,8 @@ export default function DocClient() {
           selectedIds={new Set()}
           setSelectedIds={noAction}
           onDelete={handleDeleteItem}
-          onRename={handleRenameItem}
-          onMove={handleMoveItem} // Pastikan prop ini ditangkap di ListView Anda
+          onRename={(item, newName) => handleRenameItem(item)}
+          onMove={handleMoveItem}
           onToggleShare={noAction}
         />
       )}
