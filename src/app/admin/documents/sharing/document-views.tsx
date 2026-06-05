@@ -28,6 +28,7 @@ interface DocumentItem {
   id: string | number
   name: string
   file_size: number | string
+  user_id: string | number
   file_type: string
   is_folder: boolean
   is_shared: boolean
@@ -100,7 +101,9 @@ const MenuItems = ({
   onToggleShare: (item: DocumentItem) => void;
   onInfoClick: (item: DocumentItem) => void;
 }) => {
-  console.log("Rendering menu for:", item)
+  const id_user = Cookies.get("id")
+  console.log("ID User dari Cookie:", id_user)
+  console.log("Item User ID:", item.user_id)
   if (item.access_level === "editor") {
     return (
     <>
@@ -110,9 +113,11 @@ const MenuItems = ({
       <ContextMenuItem onClick={() => onRename(item)} className="cursor-pointer">
         <Pencil className="w-4 h-4 mr-2" /> Rename
       </ContextMenuItem>
-      <ContextMenuItem onClick={() => onToggleShare(item)} className="cursor-pointer">
-        <Share2 className="w-4 h-4 mr-2" /> {item.is_shared ? "Unshare" : "Share"}
-      </ContextMenuItem>
+      {item.is_folder && Number(item.user_id) === Number(id_user) ? (
+        <ContextMenuItem onClick={() => onToggleShare(item)} className="cursor-pointer">
+          <Share2 className="w-4 h-4 mr-2" /> {item.is_shared ? "Unshare" : "Share"}
+        </ContextMenuItem>
+      ) : null}
       <ContextMenuItem onClick={() => onDownload(item)} className="cursor-pointer">
         <Download className="w-4 h-4 mr-2" /> Download
       </ContextMenuItem>

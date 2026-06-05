@@ -38,13 +38,14 @@ export function LoginForm({
       
       // Destructuring data
       const { access_token: accessToken } = load
-      const { name, role, username } = load.user
+      const { id, name, role, username } = load.user
 
       const ONE_DAY_IN_SECONDS = 24 * 60 * 60
       const cookieConfig = `; path=/; max-age=${ONE_DAY_IN_SECONDS}; SameSite=Lax`
 
       // Simpan Cookies
       document.cookie = `access_token=${accessToken}${cookieConfig}; Secure`
+      document.cookie = `id=${id}${cookieConfig}`
       document.cookie = `name=${name}${cookieConfig}`
       document.cookie = `role=${role}${cookieConfig}`
       document.cookie = `username=${username}${cookieConfig}`

@@ -17,6 +17,7 @@ interface DocumentItem {
   id: string | number
   name: string
   file_size: number | string
+  user_id: string | number
   file_type: string
   is_folder: boolean
   is_shared: boolean
@@ -139,6 +140,7 @@ export default function DocClient() {
         const mappedFolders: DocumentItem[] = folders.map((f: APISharedItem) => ({ 
           id: f.id,
           name: f.name,
+          user_id: f.user_id || 0,
           file_size: f.file_size ?? "--",
           file_type: "folder",
           is_folder: true,
@@ -152,6 +154,7 @@ export default function DocClient() {
         const mappedFiles: DocumentItem[] = files.map((f: APISharedItem) => ({ 
           id: f.id,
           name: f.name,
+          user_id: f.user_id || 0,
           file_size: f.file_size ?? 0,
           file_type: f.file_type || "unknown",
           is_folder: false,

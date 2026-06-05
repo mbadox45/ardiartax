@@ -1,9 +1,23 @@
 // src/app/admin/dashboard/dash-user.tsx
 "use client"
 
-import React from 'react'
+import { useState, useEffect } from 'react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card" // Sesuaikan dengan path component library Anda (misal: shadcn)
-import { ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from 'recharts'
+import { ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, LegendPayload } from 'recharts'
+import { dashboardService } from "@/lib/api/dashboard.service"
+import { ValueType, NameType } from 'recharts/types/component/DefaultTooltipContent';
+
+// ==========================================
+// UTILITY FUNCTION (Format Bytes)
+// ==========================================
+const formatBytes = (bytes: number, decimals = 2) => {
+  if (bytes === 0) return '0 B';
+  const k = 1024;
+  const dm = decimals < 0 ? 0 : decimals;
+  const sizes = ['B', 'KB', 'MB', 'GB', 'TB', 'PB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
+};
 
 // ==========================================
 // DATA DUMMY
@@ -14,29 +28,71 @@ const storageData = [
   { name: 'Used Storage', value: 342, color: '#3b82f6' }, // Biru (342 GB)
   { name: 'Free Storage', value: 170, color: '#e2e8f0' }, // Abu-abu (170 GB)
 ]
-const totalStorage = 512 // GB
-const storageInUsed = 342 // GB
 
 // Data untuk 30 Hari Aktivitas (Line Chart)
 // Di-generate singkat sebagai representasi 30 hari
-const activityData = Array.from({ length: 30 }, (_, i) => ({
-  day: `Hari ${i + 1}`,
-  tasks: Math.floor(Math.random() * 15) + 2 // Random 2 - 17 tugas selesai
-}))
+// const activityData = Array.from({ length: 30 }, (_, i) => ({
+//   day: `Hari ${i + 1}`,
+//   tasks: Math.floor(Math.random() * 15) + 2 // Random 2 - 17 tugas selesai
+// }))
 
-// Data untuk Table My Task Activity
-const taskActivity = [
-  { id: "1", task: "Revisi Faktur Pajak PT INL", status: "Completed", date: "2026-06-02", priority: "High" },
-  { id: "2", task: "Sinkronisasi Docker Container ArdiarTax", status: "In Progress", date: "2026-06-02", priority: "High" },
-  { id: "3", task: "Update Route API Backend", status: "Completed", date: "2026-06-01", priority: "Medium" },
-  { id: "4", task: "Review SPT Masa PPN", status: "Pending", date: "2026-05-31", priority: "Low" },
-  { id: "5", task: "Slicing halaman Dashboard Admin", status: "In Progress", date: "2026-05-30", priority: "Medium" },
-]
+interface storageItems {
+  name: string
+  value: number
+  color: string
+}
+
+interface StorageLegendPayload extends LegendPayload {
+  payload?: {
+    name: string;
+    value: number;
+    color: string;
+  };
+}
+
+interface activityItems {
+  id: number
+  task: string
+  date: string
+  priority: string
+  status: string
+}
+
+interface ActivityData {
+  day: string
+  tasks: number
+}
 
 // ==========================================
 // KOMPONEN UTAMA
 // ==========================================
 export default function DashUser() {
+  const [storageStats, setStorageStats] = useState<storageItems[] | null>(null)
+  const [totalStorage, setTotalStorage] = useState<number>(0)
+  const [satuanTotalStorage, setSatuanTotalStorage] = useState<string>("GB")
+  const [storageInUsed, setStorageInUsed] = useState<number>(0)
+  const [satuanStorageInUsed, setSatuanStorageInUsed] = useState<string>("GB")
+  const [taskActivity, setTaskActivity] = useState<activityItems[]>([])
+  const [activityData, setActivityData] = useState<ActivityData[]>([])
+
+  useEffect(() => {
+    const fetchStorageStats = async () => {
+      const stats = await dashboardService.getStorageStats()
+      setTotalStorage(stats.total_storage)
+      setSatuanTotalStorage(stats.total_storage_formatted) // Ambil satuan dari string "512 GB"
+      setStorageInUsed(stats.storage_used)
+      setSatuanStorageInUsed(stats.storage_used_formatted) // Ambil satuan dari string "342 GB"
+      setStorageStats([
+        { name: 'Used Storage', value: stats.storage_used_bytes, color: '#3b82f6' },
+        { name: 'Free Storage', value: stats.total_storage_bytes - stats.storage_used_bytes, color: '#62748E' },
+      ])
+      setActivityData(stats.activityData) 
+    }
+    fetchStorageStats()
+  }, [])
+
+  const activeStorageData = storageStats || storageData;
+
   return (
     <div className="p-6 space-y-6 bg-slate-50 min-h-screen text-slate-900">
       <div className="flex flex-col space-y-1">
@@ -52,7 +108,7 @@ export default function DashUser() {
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4 text-blue-500"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold">{storageInUsed} GB</div>
+            <div className="text-3xl font-bold">{storageInUsed} {satuanStorageInUsed}</div>
             <p className="text-xs text-muted-foreground mt-1">Menggunakan sekitar {((storageInUsed/totalStorage)*100).toFixed(1)}% dari kapasitas total</p>
           </CardContent>
         </Card>
@@ -63,8 +119,8 @@ export default function DashUser() {
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4 text-slate-500"><rect x="2" y="2" width="20" height="8" rx="2" ry="2"></rect><rect x="2" y="14" width="20" height="8" rx="2" ry="2"></rect><line x1="6" y1="6" x2="6.01" y2="6"></line><line x1="6" y1="18" x2="6.01" y2="18"></line></svg>
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold">{totalStorage} GB</div>
-            <p className="text-xs text-muted-foreground mt-1">Sisa ruang penyimpanan terdeteksi: {totalStorage - storageInUsed} GB</p>
+            <div className="text-3xl font-bold">{totalStorage} {satuanTotalStorage}</div>
+            <p className="text-xs text-muted-foreground mt-1">Sisa ruang penyimpanan terdeteksi: {totalStorage - storageInUsed} {satuanTotalStorage}</p>
           </CardContent>
         </Card>
       </div>
@@ -79,9 +135,10 @@ export default function DashUser() {
           </CardHeader>
           <CardContent className="h-[300px] flex items-center justify-center">
             <ResponsiveContainer width="100%" height="100%">
+
               <PieChart>
                 <Pie
-                  data={storageData}
+                  data={activeStorageData}
                   cx="50%"
                   cy="50%"
                   innerRadius={60}
@@ -89,12 +146,25 @@ export default function DashUser() {
                   paddingAngle={5}
                   dataKey="value"
                 >
-                  {storageData.map((entry, index) => (
+                  {activeStorageData.map((entry, index) => (
                     <Cell key={`cell-${index}`} fill={entry.color} />
                   ))}
                 </Pie>
-                <Tooltip formatter={(value) => `${value} GB`} />
-                <Legend verticalAlign="bottom" height={36}/>
+                
+                {/* FORMATTER TOOLTIP: Mengonversi byte ke unit relevan saat kursor diarahkan */}
+                <Tooltip formatter={(value: number) => formatBytes(value)} />
+                
+                {/* FORMATTER LEGEND: Menampilkan ukuran langsung di legenda bawah chart */}
+                <Legend 
+                  verticalAlign="bottom" 
+                  height={36}
+                  formatter={(value: string, entry: StorageLegendPayload) => {
+                    // Sekarang TypeScript tahu persis bahwa entry.payload memiliki properti 'value' bertipe number
+                    const rawValue = entry.payload?.value ?? 0;
+                    
+                    return `${value} (${formatBytes(rawValue)})`;
+                  }}
+                />
               </PieChart>
             </ResponsiveContainer>
           </CardContent>
@@ -138,7 +208,7 @@ export default function DashUser() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {taskActivity.map((row) => (
+                {taskActivity.length > 0 ? taskActivity.map((row) => (
                   <tr key={row.id} className="hover:bg-slate-50/70 transition-colors">
                     <td className="px-4 py-3.5 font-medium text-slate-900">{row.task}</td>
                     <td className="px-4 py-3.5 text-slate-500">{row.date}</td>
@@ -159,7 +229,11 @@ export default function DashUser() {
                       </span>
                     </td>
                   </tr>
-                ))}
+                )): (
+                  <tr>
+                    <td colSpan={4} className="px-4 py-3.5 text-center text-slate-500">No task activity found.</td>
+                  </tr>
+                )}
               </tbody>
             </table>
           </div>
