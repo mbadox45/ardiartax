@@ -53,7 +53,7 @@ class GroupService {
   }
 
   // PUT /api/v1/groups/{group_id}
-  async update(id: string | number, data: { name: string; is_active: boolean; parent_id: number }) {
+  async update(id: string | number, data: { name: string; is_active: boolean; parent_id: number | null }) {
     const response = await fetch(`${this.baseUrl}/${id}`, {
       method: 'PUT',
       headers: this.getHeaders(),

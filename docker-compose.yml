@@ -1,3 +1,5 @@
+version: '3.8'
+
 services:
   mydoc-client:
     build:
@@ -13,3 +15,9 @@ services:
       - .env
     environment:
       - NODE_ENV=production
+    # Tambahkan batasan resource jika hardware Anda terbatas
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'       # Batasi maksimal menggunakan 2 Cores CPU
+          memory: 1024M     # Batasi maksimal 1 GB RAM (NextJS standalone sangat aman di < 1GB)

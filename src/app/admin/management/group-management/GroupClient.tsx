@@ -13,8 +13,8 @@ import { Badge } from "@/components/ui/badge"
 import { GroupFormDialog } from "./group-form-dialog"
 import { groupService } from "@/lib/api/group.service"
 
-// Definisikan Tipe Data Rekursif
-interface GroupNodeData {
+// Definisikan Tipe Data Rekursif untuk Struktur Tree
+export interface GroupNodeData {
   id: number
   name: string
   is_active: boolean
@@ -22,16 +22,34 @@ interface GroupNodeData {
   sub_groups: GroupNodeData[]
 }
 
+// 🛠️ DEFIND NEW INTERFACE: Tipe data flat untuk item dropdown parent
+export interface FlatGroupData {
+  id: number
+  name: string
+  parent_id: number | null
+  is_active: boolean
+}
+
+// 🛠️ DEFIND NEW INTERFACE: Tipe data payload untuk submit form
+export interface GroupFormPayload {
+  id?: number
+  name: string
+  is_active?: boolean
+  parent_id: number | null
+}
+
 export default function GroupClient() {
   const [treeData, setTreeData] = useState<GroupNodeData[]>([])
-  const [flatGroups, setFlatGroups] = useState<any[]>([]) // Diperlukan untuk dropdown list parent di Form Dialog
+  // 🛠️ FIX 1: Ganti any[] dengan FlatGroupData[]
+  const [flatGroups, setFlatGroups] = useState<FlatGroupData[]>([]) 
   const [searchQuery, setSearchQuery] = useState("")
   const [isLoading, setIsLoading] = useState(true)
 
   // State Dialog Control
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [dialogMode, setDialogMode] = useState<"create" | "update">("create")
-  const [selectedGroup, setSelectedGroup] = useState<any>(null)
+  // 🛠️ FIX 2: Ganti any dengan GroupNodeData | null
+  const [selectedGroup, setSelectedGroup] = useState<GroupNodeData | null>(null)
 
   // Fetch data struktur Tree
   const fetchGroupTree = useCallback(async () => {
@@ -79,22 +97,25 @@ export default function GroupClient() {
     }
   }
 
-  const handleFormSubmit = async (payload: any) => {
+  // 🛠️ FIX 3: Ganti payload: any dengan tipe GroupFormPayload yang jelas
+  const handleFormSubmit = async (payload: GroupFormPayload) => {
     try {
       if (dialogMode === "create") {
         await groupService.create({ name: payload.name, parent_id: payload.parent_id })
         toast.success("Grup baru berhasil dibuat")
       } else {
+        if (!payload.id) return
         await groupService.update(payload.id, {
           name: payload.name,
-          is_active: payload.is_active,
+          is_active: payload.is_active ?? true,
           parent_id: payload.parent_id
         })
         toast.success("Data grup berhasil diperbarui")
       }
       fetchGroupTree()
-    } catch (error: any) {
-      toast.error(error.message || "Gagal memproses data")
+    } catch (error: unknown) {
+      // 🛠️ FIX 4: Ganti catch (error: any) menggunakan type guard unknown & instanceof Error
+      toast.error(error instanceof Error ? error.message : "Gagal memproses data")
       throw error
     }
   }
@@ -133,7 +154,6 @@ export default function GroupClient() {
         ) : (
           <div className="space-y-1">
             {treeData
-              // Filter pencarian sederhana untuk level root (atau biarkan recursive component menangani filter jika kompleks)
               .filter(node => node.name.toLowerCase().includes(searchQuery.toLowerCase()) || node.sub_groups.some(sub => sub.name.toLowerCase().includes(searchQuery.toLowerCase())))
               .map((node) => (
                 <GroupNode 
@@ -155,7 +175,7 @@ export default function GroupClient() {
         onOpenChange={setIsDialogOpen}
         mode={dialogMode}
         selectedGroup={selectedGroup}
-        allGroups={flatGroups} // Menggunakan flat data agar dropdown bisa memilih semua grup
+        allGroups={flatGroups} 
         onSubmit={handleFormSubmit}
       />
     </div>
@@ -173,18 +193,16 @@ interface GroupNodeProps {
 }
 
 function GroupNode({ node, level, onEdit, onDelete }: GroupNodeProps) {
-  const [isOpen, setIsOpen] = useState(true) // Default terbuka
+  const [isOpen, setIsOpen] = useState(true) 
   const hasSubGroups = node.sub_groups && node.sub_groups.length > 0
 
   return (
     <div className="space-y-1">
-      {/* Baris Item Grup */}
       <div 
         className="flex items-center justify-between p-2 rounded-lg hover:bg-gray-50 transition-colors border border-transparent hover:border-gray-100 group"
-        style={{ paddingLeft: `${level * 24 + 8}px` }} // Indentasi dinamis berdasarkan kedalaman level anak
+        style={{ paddingLeft: `${level * 24 + 8}px` }} 
       >
         <div className="flex items-center gap-2">
-          {/* Tombol Tolggle Expand/Collapse */}
           <button 
             type="button"
             onClick={() => setIsOpen(!isOpen)}
@@ -193,15 +211,12 @@ function GroupNode({ node, level, onEdit, onDelete }: GroupNodeProps) {
             {isOpen ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
           </button>
 
-          {/* Ikon Folder Status */}
           <span className="text-blue-500">
             {hasSubGroups && isOpen ? <FolderOpen className="w-4 h-4 fill-blue-50" /> : <Folder className="w-4 h-4 fill-blue-50" />}
           </span>
 
-          {/* Nama Grup */}
           <span className="font-medium text-sm text-gray-900">{node.name}</span>
 
-          {/* Badge Status Keaktifan */}
           {!node.is_active && (
             <Badge variant="secondary" className="bg-rose-50 text-rose-600 text-[10px] px-1.5 py-0 border-none shadow-none">
               Nonaktif
@@ -209,7 +224,6 @@ function GroupNode({ node, level, onEdit, onDelete }: GroupNodeProps) {
           )}
         </div>
 
-        {/* Tombol Aksi - Muncul atau Lebih Jelas saat di-hover */}
         <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
           <Button 
             variant="ghost" 
@@ -230,7 +244,6 @@ function GroupNode({ node, level, onEdit, onDelete }: GroupNodeProps) {
         </div>
       </div>
 
-      {/* Render Anak (Sub-Groups) secara Rekursif */}
       {hasSubGroups && isOpen && (
         <div className="relative before:absolute before:left-[19px] before:top-0 before:bottom-3 before:w-[1px] before:bg-gray-200" style={{ marginLeft: `${level * 24}px` }}>
           <div className="space-y-1">
@@ -238,7 +251,7 @@ function GroupNode({ node, level, onEdit, onDelete }: GroupNodeProps) {
               <GroupNode 
                 key={subNode.id} 
                 node={subNode} 
-                level={level + 1} // Tambah level kedalaman
+                level={level + 1} 
                 onEdit={onEdit} 
                 onDelete={onDelete}
               />

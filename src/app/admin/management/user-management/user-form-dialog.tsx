@@ -12,17 +12,39 @@ import { Loader2, AlertTriangle, Eye, EyeOff } from "lucide-react"
 import { UserData } from "./columns"
 
 // =========================================================
-// 1. KOMPONEN UTAMA: Form Dialog (Create & Update)
+// 📄 DEFINISI INTERFACE DAN TYPE YANG AMAN (STRONG TYPE)
 // =========================================================
+
+// Interface untuk data divisi/grup yang dikembalikan oleh groupService.getAll()
+export interface GroupItem {
+  id: string | number
+  name: string
+  description?: string
+}
+
+// Interface untuk Payload saat submit form (Create atau Update)
+export interface UserFormPayload {
+  id?: string | number
+  name: string
+  username: string
+  role: string
+  group_id: number
+  password?: string
+  is_active?: boolean
+}
+
 interface UserFormDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   mode: "create" | "update"
   selectedUser: UserData | null
-  groups: any[] // Data dari groupService.getAll()
-  onSubmit: (data: any) => Promise<void>
+  groups: GroupItem[] // 🛠️ FIX: Mengganti any[] menjadi GroupItem[]
+  onSubmit: (data: UserFormPayload) => Promise<void> // 🛠️ FIX: Mengganti data: any menjadi UserFormPayload
 }
 
+// =========================================================
+// 1. KOMPONEN UTAMA: Form Dialog (Create & Update)
+// =========================================================
 export function UserFormDialog({ open, onOpenChange, mode, selectedUser, groups, onSubmit }: UserFormDialogProps) {
   const [name, setName] = useState("")
   const [username, setUsername] = useState("")
@@ -40,11 +62,11 @@ export function UserFormDialog({ open, onOpenChange, mode, selectedUser, groups,
       setRole(selectedUser.role || "user")
       setGroupId(selectedUser.group_id?.toString() || "")
       setIsActive(selectedUser.is_active ?? true)
-      setPassword("") // Reset input password pada mode update (karena memakai fitur reset password terpisah)
+      setPassword("") 
     } else {
       setName("")
       setUsername("")
-      setPassword("")
+      setPassword("123456")
       setRole("user")
       setGroupId("")
       setIsActive(true)
@@ -61,7 +83,8 @@ export function UserFormDialog({ open, onOpenChange, mode, selectedUser, groups,
 
     setIsSubmitting(true)
     try {
-      const payload: any = {
+      // 🛠️ FIX: Menggunakan type UserFormPayload yang aman daripada 'any'
+      const payload: UserFormPayload = {
         name,
         username,
         role,
@@ -150,7 +173,7 @@ export function UserFormDialog({ open, onOpenChange, mode, selectedUser, groups,
               </Select>
             </div>
 
-            {/* Dropdown Grup Riil (Diambil dari API groups) */}
+            {/* Dropdown Grup Riil */}
             <div className="grid gap-2">
               <Label htmlFor="user-group">Grup / Divisi</Label>
               <Select value={groupId} onValueChange={setGroupId}>
@@ -161,6 +184,7 @@ export function UserFormDialog({ open, onOpenChange, mode, selectedUser, groups,
                   {groups.length === 0 ? (
                     <SelectItem value="none" disabled>Belum ada grup tersedia</SelectItem>
                   ) : (
+                    // 🔒 g sekarang sudah terdeteksi bertipe GroupItem secara otomatis
                     groups.map((g) => (
                       <SelectItem key={g.id} value={g.id.toString()}>{g.name}</SelectItem>
                     ))
@@ -230,7 +254,7 @@ export function ResetPasswordDialog({ open, onOpenChange, selectedUser, onConfir
           <DialogTitle className="text-center">Konfirmasi Reset Kata Sandi</DialogTitle>
           <DialogDescription className="text-center pt-1">
             Apakah Anda yakin ingin mereset password pengguna bernama{" "}
-            <strong className="text-gray-900">"{selectedUser?.name}"</strong>?
+            <strong className="text-gray-900">`{selectedUser?.name}`</strong>?
           </DialogDescription>
         </DialogHeader>
 

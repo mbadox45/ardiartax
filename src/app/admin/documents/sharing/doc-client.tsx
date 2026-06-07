@@ -12,6 +12,15 @@ import { sharingService } from "@/lib/api/sharing.service"
 import { documentService } from "@/lib/api/documents.service" 
 import { toast } from "sonner"
 import Cookies from "js-cookie"
+import { Label } from "@/components/ui/label"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 
 interface DocumentItem {
   id: string | number
@@ -31,6 +40,7 @@ interface PathItem {
   id: string | number
   name: string
   access_level?: "editor" | "viewer"
+  is_shared?: boolean
 }
 
 interface APISharedItem {
@@ -80,6 +90,12 @@ export default function DocClient() {
   const [loading, setLoading] = useState(false)
   const [isUploading, setIsUploading] = useState(false)
   const [isDragActive, setIsDragActive] = useState(false)
+
+  const [dialogMode, setDialogMode] = useState<"create" | "rename">("create");
+  const [selectedItemToRename, setSelectedItemToRename] = useState<DocumentItem | null>(null);
+  const [folderName, setFolderName] = useState("")
+  const [isDialogOpen, setIsDialogOpen] = useState(false)
+  const [isSubmitting, setIsSubmitting] = useState(false)
   
   // State Path & Koordinat Folder Aktif
   const [path, setPath] = useState<PathItem[]>([])
@@ -178,10 +194,25 @@ export default function DocClient() {
     fetchSharedData(currentFolderId)
   }, [currentFolderId, fetchSharedData])
 
+
+  const handleRenameTrigger = (item: DocumentItem) => {
+    setDialogMode("rename");
+    setSelectedItemToRename(item);
+    setFolderName(item.name); // Isi input dengan nama lama
+    setIsDialogOpen(true);
+  };
+
+  const handleCreateTrigger = () => {
+    setDialogMode("create");
+    setSelectedItemToRename(null);
+    setFolderName("");
+    setIsDialogOpen(true);
+  };
+
   const handleFolderClick = (folder: DocumentItem) => {
     const targetAccess = currentFolderId === 0 ? folder.access_level : currentAccessLevel
     
-    const newPath = [...path, { id: folder.id, name: folder.name, access_level: targetAccess }]
+    const newPath = [...path, { id: folder.id, name: folder.name, access_level: targetAccess, is_shared: folder.is_shared }]
     setPath(newPath)
     setCurrentFolderId(folder.id)
     syncUrl(newPath)
@@ -264,40 +295,6 @@ export default function DocClient() {
     }
   }
 
-  // B. Create New Folder Action
-  const handleCreateFolder = async () => {
-    if (currentFolderId === 0) {
-      toast.error("Aksi Ditolak: Tidak diizinkan membuat folder di tingkat Root Shared Drive.")
-      return
-    }
-
-    if (currentAccessLevel !== "editor") {
-      toast.error("Aksi Ditolak: Anda tidak memiliki hak akses Editor untuk membuat folder baru.")
-      return
-    }
-
-    const folderName = prompt("Masukkan nama folder baru:")
-    if (!folderName || folderName.trim() === "") return
-
-    const toastId = toast.loading("Membuat folder...")
-    try {
-      // Mengirimkan struktur FormData atau Object sesuai spesifikasi API Anda
-      const formData = new FormData()
-      formData.append("name", folderName.trim())
-      formData.append("parent_id", String(currentFolderId))
-      formData.append("is_folder", "true")
-      formData.append("is_shared", "true")
-
-      await documentService.uploadFiles([] as any, currentFolderId, true) 
-      // Catatan: Silakan ganti pemicu di atas ke documentService.createFolder(folderName, currentFolderId) jika sudah tersedia secara spesifik
-      
-      toast.success("Folder baru berhasil dibuat", { id: toastId })
-      fetchSharedData(currentFolderId)
-    } catch (error: unknown) {
-      toast.error(error instanceof Error ? error.message : "Gagal membuat folder", { id: toastId })
-    }
-  }
-
   // C. Aksi Hapus Item
   const handleDeleteItem = async (item: DocumentItem) => {
     if (currentFolderId === 0) {
@@ -322,51 +319,43 @@ export default function DocClient() {
     }
   }
 
-  // D. Aksi Ubah Nama Item
-  const handleRenameItem = async (item: DocumentItem) => {
-    if (currentFolderId === 0) {
-      toast.error("Aksi Ditolak: Folder utama di tingkat Root tidak boleh diubah namanya.")
-      return
-    }
+  const handleSubmit = async (e: React.FormEvent) => {
+      e.preventDefault();
+      if (!folderName.trim()) return;
 
-    if (item.access_level !== "editor") {
-      toast.error("Aksi Ditolak: Anda tidak memiliki otoritas Editor untuk mengubah nama item ini.")
-      return
-    }
+      setIsSubmitting(true);
+      try {
+          if (dialogMode === "create") {
+              // Logika Create Folder yang sudah Anda miliki
+              const currentFolderStatus = path[path.length - 1]?.is_shared || false;
+              console.log(currentFolderStatus, path[path.length - 1]?.is_shared)
+              // await documentService.createFolder({
+              //     name: folderName,
+              //     parent_id: currentFolderId,
+              //     is_folder: true,
+              //     is_shared: currentFolderStatus
+              // })
+              toast.success("Folder berhasil dibuat", { position: "top-center" });
+          } else {
+              // Logika Rename
+              if (!selectedItemToRename) return;
+              const response = await documentService.renameDocument(selectedItemToRename.id, folderName.trim());
+              console.log("Rename response:", response);
+              if (!response.status) throw new Error("Gagal mengubah nama");
 
-    const newName = prompt("Masukkan nama baru:", item.name)
-    if (!newName || newName.trim() === "" || newName === item.name) return
+              toast.success("Nama berhasil diubah", { position: "top-center" });
+          }
 
-    try {
-      await documentService.renameDocument(item.id, newName.trim())
-      toast.success("Nama berhasil diperbarui")
-      fetchSharedData(currentFolderId)
-    } catch (error: unknown) {
-      toast.error(error instanceof Error ? error.message : "Gagal mengubah nama")
-    }
-  }
-
-  // E. Aksi Pindah Item
-  const handleMoveItem = async (item: DocumentItem, targetFolderId: string | number) => {
-    if (item.access_level !== "editor") {
-      toast.error("Aksi Ditolak: Berkas ini berada di luar otoritas edit Anda.")
-      return
-    }
-
-    if (targetFolderId === 0 || (rootEditorFolderId && targetFolderId === rootEditorFolderId)) {
-       toast.error("Batasan Keamanan: Tidak dapat memindahkan item ke luar dari direktori utama Editor Anda.")
-       return
-    }
-
-    const toastId = toast.loading("Memindahkan berkas...")
-    try {
-      await documentService.bulkMoveDocuments([item.id], targetFolderId)
-      toast.success("Item berhasil dipindahkan", { id: toastId })
-      fetchSharedData(currentFolderId)
-    } catch (error: unknown) {
-      toast.error(error instanceof Error ? error.message : "Gagal memindahkan item", { id: toastId })
-    }
-  }
+          setIsDialogOpen(false);
+          setFolderName("");
+          fetchSharedData(currentFolderId)
+      } catch (error: unknown) {
+          const errorMessage = error instanceof Error ? error.message : "Terjadi kesalahan";
+          toast.error(errorMessage, { position: "top-center" });
+      } finally {
+          setIsSubmitting(false);
+      }
+  };
 
   const formatSize = (bytes: number | string) => {
     if (!bytes || isNaN(Number(bytes))) return "--"
@@ -439,7 +428,7 @@ export default function DocClient() {
             <Button
               variant="outline"
               size="sm"
-              onClick={handleCreateFolder}
+              onClick={handleCreateTrigger}
               className="h-9 text-xs font-semibold flex items-center gap-2 border-gray-200 hover:bg-gray-50"
             >
               <FolderPlus className="w-4 h-4 text-gray-500" />
@@ -564,8 +553,7 @@ export default function DocClient() {
           selectedIds={new Set()}
           setSelectedIds={noAction}
           onDelete={handleDeleteItem}
-          onRename={(item, newName) => handleRenameItem(item)}
-          onMove={handleMoveItem}
+          onRename={handleRenameTrigger}
           onToggleShare={noAction}
         />
       ) : (
@@ -578,11 +566,53 @@ export default function DocClient() {
           selectedIds={new Set()}
           setSelectedIds={noAction}
           onDelete={handleDeleteItem}
-          onRename={(item, newName) => handleRenameItem(item)}
-          onMove={handleMoveItem}
+          onRename={handleRenameTrigger}
           onToggleShare={noAction}
         />
       )}
+      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+        <DialogContent className="sm:max-w-[425px]">
+            <form onSubmit={handleSubmit}>
+                <DialogHeader>
+                    <DialogTitle>
+                        {dialogMode === "create" ? "Folder Baru" : "Ubah Nama"}
+                    </DialogTitle>
+                    <DialogDescription>
+                        {dialogMode === "create" 
+                            ? "Masukkan nama untuk folder baru Anda." 
+                            : `Masukkan nama baru untuk ${selectedItemToRename?.is_folder ? 'folder' : 'file'} ini.`}
+                    </DialogDescription>
+                </DialogHeader>
+                <div className="grid gap-4 py-4">
+                    <div className="grid gap-2">
+                        <Label htmlFor="name">Nama</Label>
+                        <Input 
+                            id="name" 
+                            value={folderName} 
+                            onChange={(e) => setFolderName(e.target.value)} 
+                            placeholder={dialogMode === "create" ? "Untitled Folder" : "Masukkan nama baru"} 
+                            autoFocus 
+                            required 
+                        />
+                    </div>
+                </div>
+                <DialogFooter>
+                    <Button type="button" variant="ghost" onClick={() => setIsDialogOpen(false)} disabled={isSubmitting}>Batal</Button>
+                    <Button 
+                        type="submit" 
+                        disabled={isSubmitting || !folderName.trim() || (dialogMode === "rename" && folderName === selectedItemToRename?.name)} 
+                        className="bg-blue-600 hover:bg-blue-700 text-white"
+                    >
+                        {isSubmitting ? (
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        ) : (
+                            dialogMode === "create" ? "Simpan" : "Perbarui"
+                        )}
+                    </Button>
+                </DialogFooter>
+            </form>
+        </DialogContent>
+    </Dialog>
     </div>
   )
 }

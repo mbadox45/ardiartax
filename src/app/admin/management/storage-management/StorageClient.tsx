@@ -35,7 +35,7 @@ export default function StorageClient() {
   // State Dialog Control
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [selectedUser, setSelectedUser] = useState<StorageData | null>(null)
-  const [additionalQuota, setAdditionalQuota] = useState<string>("500") // Nilai bawaan 500 MB
+  const [additionalQuota, setAdditionalQuota] = useState<string>("500") // Nilai bawaan 500 GB
   const [isSubmitting, setIsSubmitting] = useState(false)
 
   // Ambil data penggunaan storan semua pengguna dari endpoint baharu
@@ -45,7 +45,7 @@ export default function StorageClient() {
       const data = await storageService.getAllUsersStorage()
       setStorageList(Array.isArray(data) ? data : [])
     } catch (error) {
-      toast.error("Gagal menyinkronkan data kapasiti storan")
+      toast.error("Gagal menyinkronkan data kapasitas penyimpanan")
       setStorageList([])
     } finally {
       setIsLoading(false)
@@ -56,10 +56,10 @@ export default function StorageClient() {
     fetchStorageData()
   }, [fetchStorageData])
 
-  // Memasang Event Listener untuk menangkap aksi klik butang dari columns.tsx
+  // Memasang Event Listener untuk menangkap aksi klik tombol dari columns.tsx
   useEffect(() => {
     const handleQuotaTrigger = (e: Event) => {
-      const storageItem = (e as CustomEvent).detail
+      const storageItem = (e as CustomEvent<StorageData>).detail
       setSelectedUser(storageItem)
       setAdditionalQuota("500") // Set semula nilai input kepada asal
       setIsDialogOpen(true)
@@ -69,38 +69,50 @@ export default function StorageClient() {
     return () => window.removeEventListener("storage-action-quota", handleQuotaTrigger)
   }, [])
 
-  // Pengendali Hantar (Submit) Penambahan Kuota
+  // Pengendali Kirim (Submit) Penambahan Kuota
   const handleAddQuotaSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!selectedUser) return
+
+    // 🛠️ FIX 2: Proteksi konversi angka agar terhindar dari nilai NaN jika input kosong
+    const quotaAmount = Number(additionalQuota)
+    if (isNaN(quotaAmount) || quotaAmount <= 0) {
+      toast.error("Silakan masukkan nilai kapasitas kuota yang valid")
+      return
+    }
 
     setIsSubmitting(true)
     try {
       await storageService.addQuota({
         user_id: Number(selectedUser.user_id),
-        additional_storage_gb: Number(additionalQuota)
+        additional_storage_mb: quotaAmount // Aman dari NaN
       })
 
-      toast.success(`Berjaya menambah kuota sebanyak ${additionalQuota} GB untuk ${selectedUser.name}`)
+      toast.success(`Berhasil menambah kuota sebanyak ${quotaAmount} GB untuk ${selectedUser.name}`)
       setIsDialogOpen(false)
-      fetchStorageData() // Memuatkan semula data untuk mengemas kini paparan kapasiti terkini
-    } catch (error: any) {
-      toast.error(error.message || "Gagal menambah kapasiti kuota")
+      fetchStorageData() 
+    } catch (error: unknown) {
+      // 🛠️ FIX 1: Mengganti error: any menjadi aman menggunakan type guard unknown
+      toast.error(error instanceof Error ? error.message : "Gagal menambah kapasitas kuota")
     } finally {
       setIsSubmitting(false)
     }
   }
 
-  // Penapisan pencarian pada jadual
-  const filteredStorage = storageList.filter(item => 
-    item.user_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    item.username?.toLowerCase().includes(searchQuery.toLowerCase())
-  )
+  // 🛠️ FIX 3: Mengganti 'item.user_name' menjadi 'item.name' sesuai interface StorageData pada columns.tsx
+  const filteredStorage = storageList.filter(item => {
+    const nameMatch = item.name?.toLowerCase().includes(searchQuery.toLowerCase()) ?? false
+    const usernameMatch = item.username?.toLowerCase().includes(searchQuery.toLowerCase()) ?? false
+    return nameMatch || usernameMatch
+  })
+
+  // Helper pengiraan aman untuk preview bytes di dalam box info modal dialog
+  const calculatedTargetBytes = (selectedUser?.max_storage_bytes || 0) + (Number(additionalQuota || 0) * 1024 * 1024 * 1024)
 
   return (
     <div className="pb-6 pt-3 px-6 space-y-6">
       {/* Header */}
-      <HeaderPage title="Storage Management" description="Pantau kapasiti storan fail dan urus kuota pengguna" />
+      <HeaderPage title="Storage Management" description="Pantau kapasitas penyimpanan file dan urus kuota pengguna" />
 
       {/* Toolbar */}
       <div className="flex items-center justify-between gap-4 bg-white p-3 rounded-lg border shadow-sm">
@@ -115,7 +127,7 @@ export default function StorageClient() {
         </div>
       </div>
 
-      {/* Section Jadual Data */}
+      {/* Section Tabel Data */}
       <div className="bg-white border rounded-xl shadow-sm relative min-h-[200px]">
         {isLoading ? (
           <div className="absolute inset-0 flex items-center justify-center bg-white/50 z-10">
@@ -136,41 +148,37 @@ export default function StorageClient() {
                 Tambah Kuota Storage
               </DialogTitle>
               <DialogDescription>
-                Berikan kapasitis tambahan untuk akaun <strong className="text-gray-900">{selectedUser?.username}</strong> ({selectedUser?.name}).
+                Berikan kapasitas tambahan untuk akun <strong className="text-gray-900">{selectedUser?.username}</strong> ({selectedUser?.name}).
               </DialogDescription>
             </DialogHeader>
 
             <div className="space-y-4 py-2">
               <div className="grid gap-2">
-                {/* Label ditukar kepada GB */}
                 <Label htmlFor="quota-input">Kapasitas Tambahan (dalam GB)</Label>
                 <div className="relative flex items-center">
                   <Input 
                     id="quota-input" 
                     type="number" 
-                    min="1"
-                    step="any" // Membolehkan admin memasukkan nilai perpuluhan seperti 0.5 GB
+                    min="0.1"
+                    step="any" 
                     value={additionalQuota} 
                     onChange={(e) => setAdditionalQuota(e.target.value)}
                     placeholder="Contoh: 2"
                     required
                   />
-                  {/* Badge unit di sebelah kanan input ditukar ke GB */}
                   <span className="absolute right-3 font-semibold text-xs text-muted-foreground bg-gray-50 px-2 py-1 rounded border">GB</span>
                 </div>
               </div>
 
-              {/* Kotak Info Pengiraan Kapasiti Menggunakan formatBytes */}
+              {/* Kotak Info Perhitungan Kapasitas */}
               <div className="flex gap-2.5 items-start p-3 bg-blue-50 border border-blue-100 rounded-lg text-xs text-blue-800">
                 <ShieldAlert className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
                 <div className="space-y-1">
-                  <p>Kuota semasa: <strong>{formatBytes(selectedUser?.max_storage_bytes || 0)}</strong></p>
+                  <p>Kuota saat ini: <strong>{formatBytes(selectedUser?.max_storage_bytes || 0)}</strong></p>
                   <p>
-                    Selepas disimpan, kuota keseluruhan akan bertambah menjadi{" "}
+                    Setelah disimpan, kuota keseluruhan akan bertambah menjadi{" "}
                     <strong>
-                      {formatBytes(
-                        (selectedUser?.max_storage_bytes || 0) + (Number(additionalQuota || 0) * 1024 * 1024 * 1024)
-                      )}
+                      {formatBytes(isNaN(calculatedTargetBytes) ? (selectedUser?.max_storage_bytes || 0) : calculatedTargetBytes)}
                     </strong>.
                   </p>
                 </div>

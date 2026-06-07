@@ -11,7 +11,7 @@ export type UserData = {
   id: number | string
   name: string
   username: string
-  role: "super_admin" | "admin" | "user"
+  role: "super_admin" | "user_tax" | "admin" | "user"
   group_id: number
   group_name?: string // Opsional, jika API menyertakan nama grupnya langsung
   is_active?: boolean // Menyesuaikan Swagger, status keaktifan menggunakan boolean

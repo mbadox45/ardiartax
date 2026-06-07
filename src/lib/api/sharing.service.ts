@@ -21,7 +21,26 @@ export const sharingService = {
       }
     })
 
-    if (!response.ok) throw new Error("Gagal memuat dokumen bersama")
+    if (!response.status) throw new Error("Gagal memuat dokumen bersama")
+    return response.json()
+  },
+
+  getSharedDocumentsById: async (id: string | number | null) => {
+    const token = Cookies.get("access_token")
+    
+    // Menyusun query parameter jika di dalam sub-folder
+    const url = new URL(`${BASE_URL}/document-sharing/${id}/detail`)
+
+    const response = await fetch(url.toString(), {
+      method: "GET",
+      headers: {
+        "Authorization": `Bearer ${token}`,
+        "Content-Type": "application/json"
+      }
+    })
+
+    if (!response.status) throw new Error("Gagal memuat dokumen bersama")
     return response.json()
   }
+  
 }

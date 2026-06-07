@@ -2,15 +2,14 @@
 "use client"
 
 import { useState, useEffect } from 'react'
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card" // Sesuaikan dengan path component library Anda (misal: shadcn)
-import { ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, LegendPayload } from 'recharts'
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
+import { ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from 'recharts'
 import { dashboardService } from "@/lib/api/dashboard.service"
-import { ValueType, NameType } from 'recharts/types/component/DefaultTooltipContent';
 
 // ==========================================
 // UTILITY FUNCTION (Format Bytes)
 // ==========================================
-const formatBytes = (bytes: number, decimals = 2) => {
+const formatBytes = (bytes: number, decimals = 2): string => {
   if (bytes === 0) return '0 B';
   const k = 1024;
   const dm = decimals < 0 ? 0 : decimals;
@@ -20,37 +19,15 @@ const formatBytes = (bytes: number, decimals = 2) => {
 };
 
 // ==========================================
-// DATA DUMMY
+// INTERFACES & TYPES
 // ==========================================
-
-// Data untuk Storage (Pie Chart & Cards)
-const storageData = [
-  { name: 'Used Storage', value: 342, color: '#3b82f6' }, // Biru (342 GB)
-  { name: 'Free Storage', value: 170, color: '#e2e8f0' }, // Abu-abu (170 GB)
-]
-
-// Data untuk 30 Hari Aktivitas (Line Chart)
-// Di-generate singkat sebagai representasi 30 hari
-// const activityData = Array.from({ length: 30 }, (_, i) => ({
-//   day: `Hari ${i + 1}`,
-//   tasks: Math.floor(Math.random() * 15) + 2 // Random 2 - 17 tugas selesai
-// }))
-
-interface storageItems {
+interface StorageItems {
   name: string
   value: number
   color: string
 }
 
-interface StorageLegendPayload extends LegendPayload {
-  payload?: {
-    name: string;
-    value: number;
-    color: string;
-  };
-}
-
-interface activityItems {
+interface ActivityItems {
   id: number
   task: string
   date: string
@@ -63,30 +40,40 @@ interface ActivityData {
   tasks: number
 }
 
+// Data fallback default untuk Storage (Pie Chart & Cards)
+const storageData: StorageItems[] = [
+  { name: 'Used Storage', value: 342, color: '#3b82f6' },
+  { name: 'Free Storage', value: 170, color: '#e2e8f0' },
+]
+
 // ==========================================
 // KOMPONEN UTAMA
 // ==========================================
 export default function DashUser() {
-  const [storageStats, setStorageStats] = useState<storageItems[] | null>(null)
+  const [storageStats, setStorageStats] = useState<StorageItems[] | null>(null)
   const [totalStorage, setTotalStorage] = useState<number>(0)
   const [satuanTotalStorage, setSatuanTotalStorage] = useState<string>("GB")
   const [storageInUsed, setStorageInUsed] = useState<number>(0)
   const [satuanStorageInUsed, setSatuanStorageInUsed] = useState<string>("GB")
-  const [taskActivity, setTaskActivity] = useState<activityItems[]>([])
+  const [taskActivity] = useState<ActivityItems[]>([]) // Menggunakan state kosong bawaan code awal
   const [activityData, setActivityData] = useState<ActivityData[]>([])
 
   useEffect(() => {
     const fetchStorageStats = async () => {
-      const stats = await dashboardService.getStorageStats()
-      setTotalStorage(stats.total_storage)
-      setSatuanTotalStorage(stats.total_storage_formatted) // Ambil satuan dari string "512 GB"
-      setStorageInUsed(stats.storage_used)
-      setSatuanStorageInUsed(stats.storage_used_formatted) // Ambil satuan dari string "342 GB"
-      setStorageStats([
-        { name: 'Used Storage', value: stats.storage_used_bytes, color: '#3b82f6' },
-        { name: 'Free Storage', value: stats.total_storage_bytes - stats.storage_used_bytes, color: '#62748E' },
-      ])
-      setActivityData(stats.activityData) 
+      try {
+        const stats = await dashboardService.getStorageStats()
+        setTotalStorage(stats.total_storage)
+        setSatuanTotalStorage(stats.total_storage_formatted) 
+        setStorageInUsed(stats.storage_used)
+        setSatuanStorageInUsed(stats.storage_used_formatted) 
+        setStorageStats([
+          { name: 'Used Storage', value: stats.storage_used_bytes, color: '#3b82f6' },
+          { name: 'Free Storage', value: stats.total_storage_bytes - stats.storage_used_bytes, color: '#62748E' },
+        ])
+        setActivityData(stats.activityData) 
+      } catch (error) {
+        console.error("Gagal mengambil data statistik dashboard:", error)
+      }
     }
     fetchStorageStats()
   }, [])
@@ -109,7 +96,7 @@ export default function DashUser() {
           </CardHeader>
           <CardContent>
             <div className="text-3xl font-bold">{storageInUsed} {satuanStorageInUsed}</div>
-            <p className="text-xs text-muted-foreground mt-1">Menggunakan sekitar {((storageInUsed/totalStorage)*100).toFixed(1)}% dari kapasitas total</p>
+            <p className="text-xs text-muted-foreground mt-1">Menggunakan sekitar {totalStorage > 0 ? ((storageInUsed/totalStorage)*100).toFixed(1) : 0}% dari kapasitas total</p>
           </CardContent>
         </Card>
 
@@ -135,7 +122,6 @@ export default function DashUser() {
           </CardHeader>
           <CardContent className="h-[300px] flex items-center justify-center">
             <ResponsiveContainer width="100%" height="100%">
-
               <PieChart>
                 <Pie
                   data={activeStorageData}
@@ -151,17 +137,25 @@ export default function DashUser() {
                   ))}
                 </Pie>
                 
-                {/* FORMATTER TOOLTIP: Mengonversi byte ke unit relevan saat kursor diarahkan */}
-                <Tooltip formatter={(value: number) => formatBytes(value)} />
+                {/* 🛠️ FIX 1: Menggunakan tuple formatter [string, string] yang didukung penuh oleh Recharts Tooltip */}
+                <Tooltip 
+                  formatter={(value: unknown) => {
+                    // Memastikan nilai opsional aman dikonversi ke angka sebelum di-format
+                    const numericValue = typeof value === 'number' ? value : Number(value);
+                    
+                    if (isNaN(numericValue)) return ["0 B", "Kapasitas"];
+                    
+                    return [formatBytes(numericValue), "Kapasitas"];
+                  }} 
+                />
                 
-                {/* FORMATTER LEGEND: Menampilkan ukuran langsung di legenda bawah chart */}
+                {/* 🛠️ FIX 2: Menggunakan token type assertion unkown ke object item data yang masuk ke Legend */}
                 <Legend 
                   verticalAlign="bottom" 
                   height={36}
-                  formatter={(value: string, entry: StorageLegendPayload) => {
-                    // Sekarang TypeScript tahu persis bahwa entry.payload memiliki properti 'value' bertipe number
-                    const rawValue = entry.payload?.value ?? 0;
-                    
+                  formatter={(value: string, entry) => {
+                    const payload = entry.payload as unknown as StorageItems | undefined
+                    const rawValue = payload?.value ?? 0;
                     return `${value} (${formatBytes(rawValue)})`;
                   }}
                 />
