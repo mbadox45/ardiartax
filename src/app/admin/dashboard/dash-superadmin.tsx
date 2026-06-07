@@ -1,6 +1,6 @@
 "use client"
 
-import React from 'react'
+import { useState, useEffect } from 'react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { 
   ResponsiveContainer, PieChart, Pie, Cell, 
@@ -11,6 +11,8 @@ import {
   Server, Users, HardDrive, 
   Activity, LayoutGrid 
 } from 'lucide-react'
+import { dashboardService } from "@/lib/api/dashboard.service"
+
 
 // ==========================================
 // DATA DUMMY SUPERADMIN
@@ -48,7 +50,37 @@ const allUserActivity = [
   { id: "5", user: "Eko Prasetyo", task: "Download Backup Database", group: "IT Support", status: "Success", date: "2026-06-01 17:10" },
 ]
 
+interface folderGroups {
+  group_name: string
+  count: number
+}
 export default function DashSuperadmin() {
+  const [globalUsedStorage, setGlobalUsedStorage] = useState<string | "0 B">("0 B")
+  const [serverCapacity, setServerCapacity] = useState<string | "0 B">("0 B")
+  const [totalGroups, setTotalGroups] = useState<number>(0)
+  const [sharedFolders, setSharedFolders] = useState<number>(0)
+  const [totalActivities, setTotalActivities] = useState<string | "-">("-")
+  const [sharedFolderGroups, setSharedFolderGroups] = useState<folderGroups[]>([])
+
+  useEffect(() => {
+    const fetchStorageStats = async () => {
+      try {
+        const stats = await dashboardService.getStorageStats()
+        
+        const card = stats.cards
+        setGlobalUsedStorage(`${card.global_used_storage.total} ${card.global_used_storage.formatted}`)
+        setServerCapacity(`${card.server_capacity.total} ${card.server_capacity.formatted}`)
+        setTotalGroups(card.total_groups)
+        setSharedFolders(card.shared_folders)
+
+        const chartData = stats.charts
+        setSharedFolderGroups(chartData.shared_folders_by_group)
+      } catch (error) {
+        console.error("Gagal mengambil data statistik dashboard:", error)
+      }
+    }
+    fetchStorageStats()
+  }, [])
   return (
     <div className="p-6 space-y-6 bg-slate-50 min-h-screen text-slate-900">
       {/* HEADER */}
@@ -66,8 +98,8 @@ export default function DashSuperadmin() {
             <Server className="h-4 w-4 text-blue-600" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{totalServerCapacity}</div>
-            <p className="text-[10px] text-blue-500 font-medium">Used: {usedServerCapacity}</p>
+            <div className="text-2xl font-bold">{serverCapacity}</div>
+            <p className="text-[10px] text-blue-500 font-medium">Used: {globalUsedStorage}</p>
           </CardContent>
         </Card>
 
@@ -78,7 +110,7 @@ export default function DashSuperadmin() {
             <HardDrive className="h-4 w-4 text-slate-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{usedServerCapacity}</div>
+            <div className="text-2xl font-bold">{globalUsedStorage}</div>
             <p className="text-[10px] text-red-500 font-medium">64% Consumption</p>
           </CardContent>
         </Card>
@@ -90,7 +122,7 @@ export default function DashSuperadmin() {
             <Users className="h-4 w-4 text-slate-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">24</div>
+            <div className="text-2xl font-bold">{totalGroups}</div>
             <p className="text-[10px] text-muted-foreground">Active Departements</p>
           </CardContent>
         </Card>
@@ -102,7 +134,7 @@ export default function DashSuperadmin() {
             <LayoutGrid className="h-4 w-4 text-slate-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">156</div>
+            <div className="text-2xl font-bold">{sharedFolders}</div>
             <p className="text-[10px] text-emerald-600 font-medium">+12 Baru minggu ini</p>
           </CardContent>
         </Card>
@@ -114,7 +146,7 @@ export default function DashSuperadmin() {
             <Activity className="h-4 w-4 text-slate-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">1,284</div>
+            <div className="text-2xl font-bold">{totalActivities}</div>
             <p className="text-[10px] text-muted-foreground">Total server requests</p>
           </CardContent>
         </Card>
@@ -150,12 +182,12 @@ export default function DashSuperadmin() {
           </CardHeader>
           <CardContent className="h-[250px]">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={folderByGroupData} layout="vertical" margin={{ left: -20 }}>
+              <BarChart data={sharedFolderGroups} layout="vertical" margin={{ left: -20 }}>
                 <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} stroke="#f1f5f9" />
                 <XAxis type="number" hide />
-                <YAxis dataKey="group" type="category" tick={{ fontSize: 11 }} width={80} />
+                <YAxis dataKey="group_name" type="category" tick={{ fontSize: 11 }} width={80} />
                 <Tooltip cursor={{fill: '#f8fafc'}} />
-                <Bar dataKey="folders" fill="#6366f1" radius={[0, 4, 4, 0]} barSize={20} />
+                <Bar dataKey="count" fill="#6366f1" radius={[0, 4, 4, 0]} barSize={20} />
               </BarChart>
             </ResponsiveContainer>
           </CardContent>
