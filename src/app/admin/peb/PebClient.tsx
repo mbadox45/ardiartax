@@ -104,14 +104,17 @@ export default function PebClient() {
     const fetchPebList = useCallback(async () => {
         setIsLoading(true);
         try {
-            console.log(isMasaTerbit)
             const masaPajakParam = formatToMasaPajak(isMasaTerbit);
-            console.log(masaPajakParam)
             const result = await pebService.getAll(masaPajakParam) 
 
+            // console.log("Data PEB yang diterima:", result);
             const hasil = result.map((item) => ({
                 ...item,
-                buyer_name: item.buyer_name.split(' ').slice(0, 2).join(' ') + '...',
+                buyer_name: item.buyer_name != null ? item.buyer_name.split(' ').slice(0, 2).join(' ') + '...' : 'X',
+                buyer_address: item.buyer_address != null ? item.buyer_address : 'X',
+                document_number: item.document_number != null ? item.document_number : 'X',
+                invoice: item.invoice != null ? item.invoice : 'X',
+                document_date: item.document_date != null ? item.document_date : '0000-00-00',
             }));
             setDataPeb(hasil);
             setDataPebOri(result);
