@@ -47,7 +47,7 @@ export function LoginForm({
       const cookieConfig = `; path=/; max-age=${ONE_DAY_IN_SECONDS}; SameSite=Lax${isProd ? '; Secure' : ''}`;
 
       // Simpan Cookies
-      document.cookie = `access_token=${accessToken}${cookieConfig}; Secure`
+      document.cookie = `access_token=${accessToken}${cookieConfig}`
       document.cookie = `id=${id}${cookieConfig}`
       document.cookie = `name=${name}${cookieConfig}`
       document.cookie = `role=${role}${cookieConfig}`
