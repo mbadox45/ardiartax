@@ -1,8 +1,8 @@
 module.exports = {
   apps : [{
     name: 'Ardiartax (3033/tcp)',
-    script: "npm",
-    args: "run dev",
+    script: "npx",
+    args: "next dev -p 3033",
     watch: true,
     cron_restart: '0 */8 * * *',
     env: {
