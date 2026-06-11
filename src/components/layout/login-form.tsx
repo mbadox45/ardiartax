@@ -32,6 +32,8 @@ export function LoginForm({
     const email = formData.get("email") as string
     const password = formData.get("password") as string
 
+    const isProd = process.env.NEXT_PUBLIC_NODE_ENV === "production";
+
     try {
       const response = await AuthService.login(email, password)
       const load = response.data
@@ -41,7 +43,8 @@ export function LoginForm({
       const { id, name, role, username } = load.user
 
       const ONE_DAY_IN_SECONDS = 24 * 60 * 60
-      const cookieConfig = `; path=/; max-age=${ONE_DAY_IN_SECONDS}; SameSite=Lax`
+      // const cookieConfig = `; path=/; max-age=${ONE_DAY_IN_SECONDS}; SameSite=Lax`
+      const cookieConfig = `; path=/; max-age=${ONE_DAY_IN_SECONDS}; SameSite=Lax${isProd ? '; Secure' : ''}`;
 
       // Simpan Cookies
       document.cookie = `access_token=${accessToken}${cookieConfig}; Secure`
@@ -61,6 +64,7 @@ export function LoginForm({
       
       // 3. Redirect ke Admin
       router.push("/admin")
+      router.refresh()
       
     } catch (err: unknown) {
       let errorMessage = "Terjadi kesalahan yang tidak terduga."
