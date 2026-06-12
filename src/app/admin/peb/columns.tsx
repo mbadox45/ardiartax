@@ -14,13 +14,13 @@ import { Row } from "@tanstack/react-table" // Import tipe Row
 export type PebData = {
   id: number
   document_number: string
-  buyer_name: string
-  buyer_address: string
+  buyer_name: string | null
+  buyer_address: string | null
   document_date: string
-  invoice: string
+  invoice: string | null
   nilai_fob: number
   nilai_tukar: number
-  invoice: string
+  invoice: string | null
   masa_terbit: string
   status: "Draft" | "Terkirim" | "Disetujui"
 }
