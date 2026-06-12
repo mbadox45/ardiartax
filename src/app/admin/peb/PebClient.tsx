@@ -108,18 +108,18 @@ export default function PebClient() {
             const result = await pebService.getAll(masaPajakParam) 
 
             // console.log("Data PEB yang diterima:", result);
-            const hasil: PebData[] = [];
+            // const hasil: PebData[] = [];
             
-            if (result.length > 0) {
-                for (const item of result) {
-                    const buyerName = item.buyer_name != null ? item.buyer_name.split(' ').slice(0, 2).join(' ') + '...' : 'X';
-                    hasil.push({ ...item, buyer_name: buyerName });
-                }
-            } else {
-                toast.info("Tidak ada data PEB untuk masa terbit ini.", {position: "top-center"});
-            }
+            // if (result.length > 0) {
+            //     for (const item of result) {
+            //         const buyerName = item.buyer_name != null ? item.buyer_name.split(' ').slice(0, 2).join(' ') + '...' : 'X';
+            //         hasil.push({ ...item, buyer_name: buyerName });
+            //     }
+            // } else {
+            //     toast.info("Tidak ada data PEB untuk masa terbit ini.", {position: "top-center"});
+            // }
             
-            setDataPeb(hasil);
+            setDataPeb(result);
             setDataPebOri(result);
         } catch (error) {
             setDataPeb([]);
