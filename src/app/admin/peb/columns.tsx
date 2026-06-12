@@ -12,7 +12,7 @@ import { Row } from "@tanstack/react-table" // Import tipe Row
 
 
 export type PebData = {
-  id: number | string
+  id: number
   document_number: string
   buyer_name: string
   buyer_address: string
