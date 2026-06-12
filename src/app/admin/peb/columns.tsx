@@ -20,7 +20,6 @@ export type PebData = {
   invoice: string | null
   nilai_fob: number
   nilai_tukar: number
-  invoice: string | null
   masa_terbit: string
   status: "Draft" | "Terkirim" | "Disetujui"
 }
