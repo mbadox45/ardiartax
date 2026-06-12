@@ -22,6 +22,7 @@ export type PebData = {
   nilai_tukar: number
   invoice: string
   masa_terbit: string
+  status: "Draft" | "Terkirim" | "Disetujui"
 }
 
 // 1. Buat komponen khusus untuk kolom ini
