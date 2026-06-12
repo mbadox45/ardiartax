@@ -109,17 +109,8 @@ export default function PebClient() {
 
             // console.log("Data PEB yang diterima:", result);
             const hasil = result.map((item) => ({
+                ...item,
                 buyer_name: item.buyer_name != null ? item.buyer_name.split(' ').slice(0, 2).join(' ') + '...' : 'X',
-                buyer_address: item.buyer_address != null ? item.buyer_address : 'X',
-                document_number: item.document_number != null ? item.document_number : 'X',
-                invoice: item.invoice != null ? item.invoice : 'X',
-                document_date: item.document_date != null ? item.document_date : '0000-00-00',
-                file_name: item.file_name,
-                id: item.id,
-                nilai_fob: item.nilai_fob,
-                nilai_tukar: item.nilai_tukar,
-                created_at: item.created_at,
-                masa_terbit: item.masa_terbit,
             }));
             setDataPeb(hasil);
             setDataPebOri(result);
