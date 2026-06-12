@@ -101,6 +101,14 @@ export const columns: ColumnDef<PebData>[] = [
   {
     accessorKey: "buyer_name",
     header: "Buyer",
+    cell: ({ row }) => {
+      const buyerName = row.getValue("buyer_name") as string 
+      return (
+        <span className={`font-medium`}>
+          {buyerName != '' ? buyerName.split(' ').slice(0, 2).join(' ') + '...' : "N/A"}
+        </span>
+      )
+    },
   },
   {
     accessorKey: "document_date",

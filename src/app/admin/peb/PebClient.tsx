@@ -111,7 +111,7 @@ export default function PebClient() {
             const hasil = result.map((item) => ({
                 ...item,
                 id: Number(item.id),
-                buyer_name: item.buyer_name ? item.buyer_name.split(' ').slice(0, 2).join(' ') + '...' : 'X',
+                buyer_name: item.buyer_name ? item.buyer_name : '',
             }));
             setDataPeb(hasil as PebData[]);
             setDataPebOri(hasil as PebData[]);
