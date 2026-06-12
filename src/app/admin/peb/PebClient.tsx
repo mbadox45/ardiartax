@@ -108,7 +108,7 @@ export default function PebClient() {
             const result = await pebService.getAll(masaPajakParam) 
 
             // console.log("Data PEB yang diterima:", result);
-            const hasil = []
+            const hasil: PebData[] = [];
             
             if (result.length > 0) {
                 for (const item of result) {
