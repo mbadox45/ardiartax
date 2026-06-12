@@ -198,7 +198,7 @@ export default function PebClient() {
                                     <ButtonGroup>
                                         <Tooltip>
                                             <TooltipTrigger asChild>
-                                                <Button variant="outline" size="lg" className="bg-gray-600 text-white hover:text-gray-600 cursor-pointer" onClick={() => handleExportXml(dataPebOri)}><FileCode /></Button>
+                                                <Button variant="outline" size="lg" className="bg-gray-600 text-white hover:text-gray-600 cursor-pointer" onClick={() => handleExportXml(dataPebOri as any)}><FileCode /></Button>
                                             </TooltipTrigger>
                                             <TooltipContent>
                                                 <p>Export by XML Data</p>
@@ -206,7 +206,7 @@ export default function PebClient() {
                                         </Tooltip>
                                         <Tooltip>
                                             <TooltipTrigger asChild>
-                                                <Button variant="outline" size="lg" className="bg-green-700 text-white hover:text-green-600 cursor-pointer" onClick={() => handleExportExcel(dataPebOri)}>
+                                                <Button variant="outline" size="lg" className="bg-green-700 text-white hover:text-green-600 cursor-pointer" onClick={() => handleExportExcel(dataPebOri as any)}>
                                                     <FileSpreadsheet />
                                                 </Button>
                                             </TooltipTrigger>
