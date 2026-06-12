@@ -112,7 +112,7 @@ export default function PebClient() {
                 ...item,
                 buyer_name: item.buyer_name ? item.buyer_name.split(' ').slice(0, 2).join(' ') + '...' : 'X',
             }));
-            setDataPeb(hasil);
+            setDataPeb(hasil as PebData[]);
             setDataPebOri(result);
         } catch (error) {
             setDataPeb([]);
