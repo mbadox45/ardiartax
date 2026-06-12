@@ -109,7 +109,8 @@ export default function PebClient() {
 
             // console.log("Data PEB yang diterima:", result);
             const hasil = result.map((item) => ({
-                ...item
+                ...item,
+                buyer_name: item.buyer_name ? item.buyer_name.split(' ').slice(0, 2).join(' ') + '...' : 'X',
             }));
             setDataPeb(hasil);
             setDataPebOri(result);

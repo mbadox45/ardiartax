@@ -13,15 +13,15 @@ import { Row } from "@tanstack/react-table" // Import tipe Row
 
 export type PebData = {
   id: number | string
-  document_number: string | null
-  buyer_name?: string | null
-  buyer_address?: string | null // Ditambah ? dan | null agar aman jika data kosong
-  document_date: string | null
-  invoice: string | null
-  nilai_fob: number | null
-  nilai_tukar: number | null
-  invoice: string | null
-  masa_terbit: string | null
+  document_number: string
+  buyer_name: string
+  buyer_address: string
+  document_date: string
+  invoice: string
+  nilai_fob: number
+  nilai_tukar: number
+  invoice: string
+  masa_terbit: string
 }
 
 // 1. Buat komponen khusus untuk kolom ini
