@@ -329,12 +329,12 @@ export default function DocClient() {
               // Logika Create Folder yang sudah Anda miliki
               const currentFolderStatus = path[path.length - 1]?.is_shared || false;
               console.log(currentFolderStatus, path[path.length - 1]?.is_shared)
-              // await documentService.createFolder({
-              //     name: folderName,
-              //     parent_id: currentFolderId,
-              //     is_folder: true,
-              //     is_shared: currentFolderStatus
-              // })
+              await documentService.createFolder({
+                  name: folderName,
+                  parent_id: currentFolderId,
+                  is_folder: true,
+                  is_shared: currentFolderStatus
+              })
               toast.success("Folder berhasil dibuat", { position: "top-center" });
           } else {
               // Logika Rename
@@ -612,7 +612,7 @@ export default function DocClient() {
                 </DialogFooter>
             </form>
         </DialogContent>
-    </Dialog>
+      </Dialog>
     </div>
   )
 }
