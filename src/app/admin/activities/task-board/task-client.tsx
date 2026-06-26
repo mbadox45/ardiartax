@@ -49,7 +49,6 @@ export default function TaskClient() {
 
         setIsSubmitting(true);
         try {
-
             setIsDialogOpen(false);
         } catch (error: unknown) {
             const errorMessage = error instanceof Error ? error.message : "Terjadi kesalahan";
